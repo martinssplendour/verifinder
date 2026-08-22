@@ -590,3 +590,36 @@ class DecisionPlanResponse(BaseModel):
     limitations: list[str] = Field(default_factory=list)
     ai_mode: AiMode
     created_at: datetime
+
+
+class FeatureAllowance(BaseModel):
+    allowed: bool
+    reset_at: datetime | None = None
+    word_limit: int | None = None
+
+
+class AccountEntitlements(BaseModel):
+    tier: Literal["free", "plus", "professional"]
+    ask: FeatureAllowance
+    planner: FeatureAllowance
+    report_download: FeatureAllowance
+
+
+class AccountStatusResponse(BaseModel):
+    authenticated: bool
+    email: str | None = None
+    entitlements: AccountEntitlements
+    billing_configured: bool
+    has_billing_account: bool = False
+
+
+class CheckoutRequest(BaseModel):
+    tier: Literal["plus", "professional"]
+
+
+class RedirectResponse(BaseModel):
+    url: str
+
+
+class ReportAccessResponse(BaseModel):
+    allowed: bool

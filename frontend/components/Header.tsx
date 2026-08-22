@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Menu } from "lucide-react";
 import { Logo } from "./Logo";
 import { DecisionTrigger } from "./DecisionDrawer";
+import { AccountActions, MobileAccountAction } from "./Account";
 
 const NAV_ITEMS = [
   ["Ask", "/ask"],
@@ -27,14 +28,7 @@ export function Header() {
               <Link key={label} href={href}>{label}</Link>
           ))}
         </nav>
-        <div className="account-actions">
-          <Link className="text-button" href="/coming-soon?feature=Accounts">
-            Sign in
-          </Link>
-          <Link className="button button-small" href="/coming-soon?feature=Accounts">
-            Sign up
-          </Link>
-        </div>
+        <AccountActions />
         <details className="mobile-nav">
           <summary aria-label="Open navigation">
             <Menu size={22} />
@@ -45,7 +39,7 @@ export function Header() {
                 <DecisionTrigger key={label} mode={label === "Ask" ? "ask" : "plan"}>{label}</DecisionTrigger> :
                 <Link key={label} href={href}>{label}</Link>
             ))}
-            <Link href="/coming-soon?feature=Accounts">Sign in</Link>
+            <MobileAccountAction />
           </div>
         </details>
       </div>

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -9,10 +9,12 @@ from app.billing_database import get_billing_db
 from app.database import get_read_db
 from app.models import ChangeEvent, IngestionRun, RunStatus
 from app.schemas import (
+    AccountStatusResponse,
     AreaCheckResponse,
     AskRequest,
     AskResponse,
     ChangeItem,
+    CheckoutRequest,
     CompanyProfile,
     FoodEstablishmentView,
     FoodSearchResponse,
@@ -28,6 +30,8 @@ from app.schemas import (
     SponsorSearchResponse,
     DecisionPlanResponse,
     PlanRequest,
+    RedirectResponse,
+    ReportAccessResponse,
     StudyProviderDetail,
     StudyProviderSearchResponse,
     SourceAttribution,
@@ -73,6 +77,22 @@ from app.services.study_lookup import (
     search_study_providers,
 )
 from app.services.decision_intelligence import answer_question, build_plan
+from app.services.auth import RequestIdentity, identity_dependency, require_authenticated
+from app.services.entitlements import (
+    check_report_entitlement,
+    entitlement_snapshot,
+    get_or_create_profile,
+    reserve_ask,
+    reserve_planner,
+)
+from app.services.stripe_billing import (
+    BillingConfigurationError,
+    billing_configured,
+    create_checkout_session,
+    create_portal_session,
+    process_webhook,
+)
+from app.billing_models import Profile, SubscriptionTier
 
 
 router = APIRouter()
@@ -80,14 +100,143 @@ settings = get_settings()
 COMPANIES_HOUSE_UNAVAILABLE = "Companies House is not connected. Configure COMPANIES_HOUSE_API_KEY to enable legal-company records."
 
 
+def _entitlement_error(result) -> HTTPException:
+    return HTTPException(
+        status_code=429,
+        detail={
+            "code": result.code or "upgrade_required",
+            "message": result.message or "Upgrade to continue.",
+            "upgrade_required": True,
+            "reset_at": result.reset_at.isoformat() if result.reset_at else None,
+        },
+    )
+
+
 @router.post("/intelligence/ask", response_model=AskResponse)
-async def ask_verifinder(request: AskRequest, session: Session = Depends(get_read_db)):
-    return await answer_question(session, request)
+async def ask_verifinder(
+    request: AskRequest,
+    public_session: Session = Depends(get_read_db),
+    billing_session: Session = Depends(get_billing_db),
+    identity: RequestIdentity = Depends(identity_dependency),
+):
+    if identity.authenticated:
+        get_or_create_profile(billing_session, identity.subject_id, identity.email)
+    entitlement = reserve_ask(
+        billing_session,
+        identity.subject_id,
+        request.question,
+        subject_ids=identity.quota_subject_ids,
+        network_hash=identity.network_hash,
+    )
+    if not entitlement.allowed:
+        raise _entitlement_error(entitlement)
+    return await answer_question(public_session, request)
 
 
 @router.post("/plans", response_model=DecisionPlanResponse)
-async def create_plan(request: PlanRequest, session: Session = Depends(get_read_db)):
-    return await build_plan(session, request)
+async def create_plan(
+    request: PlanRequest,
+    public_session: Session = Depends(get_read_db),
+    billing_session: Session = Depends(get_billing_db),
+    identity: RequestIdentity = Depends(identity_dependency),
+):
+    if identity.authenticated:
+        get_or_create_profile(billing_session, identity.subject_id, identity.email)
+    entitlement = reserve_planner(
+        billing_session,
+        identity.subject_id,
+        subject_ids=identity.quota_subject_ids,
+        network_hash=identity.network_hash,
+    )
+    if not entitlement.allowed:
+        raise _entitlement_error(entitlement)
+    return await build_plan(public_session, request)
+
+
+@router.get("/account/me", response_model=AccountStatusResponse)
+async def account_status(
+    billing_session: Session = Depends(get_billing_db),
+    identity: RequestIdentity = Depends(identity_dependency),
+):
+    if identity.authenticated:
+        get_or_create_profile(billing_session, identity.subject_id, identity.email)
+    snapshot = entitlement_snapshot(
+        billing_session,
+        identity.subject_id,
+        subject_ids=identity.quota_subject_ids,
+        network_hash=identity.network_hash,
+    )
+    profile = billing_session.get(Profile, identity.subject_id)
+    return AccountStatusResponse(
+        authenticated=identity.authenticated,
+        email=identity.email,
+        entitlements=snapshot,
+        billing_configured=billing_configured(),
+        has_billing_account=bool(profile and profile.stripe_customer_id),
+    )
+
+
+@router.post("/billing/checkout", response_model=RedirectResponse)
+async def billing_checkout(
+    request: CheckoutRequest,
+    billing_session: Session = Depends(get_billing_db),
+    identity: RequestIdentity = Depends(identity_dependency),
+):
+    require_authenticated(identity)
+    try:
+        url = create_checkout_session(
+            billing_session,
+            identity.subject_id,
+            identity.email,
+            SubscriptionTier(request.tier),
+        )
+    except BillingConfigurationError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    return RedirectResponse(url=url)
+
+
+@router.post("/billing/portal", response_model=RedirectResponse)
+async def billing_portal(
+    billing_session: Session = Depends(get_billing_db),
+    identity: RequestIdentity = Depends(identity_dependency),
+):
+    require_authenticated(identity)
+    try:
+        url = create_portal_session(billing_session, identity.subject_id)
+    except BillingConfigurationError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except LookupError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return RedirectResponse(url=url)
+
+
+@router.post("/billing/report-access", response_model=ReportAccessResponse)
+async def report_access(
+    billing_session: Session = Depends(get_billing_db),
+    identity: RequestIdentity = Depends(identity_dependency),
+):
+    result = check_report_entitlement(billing_session, identity.subject_id)
+    if not result.allowed:
+        raise _entitlement_error(result)
+    return ReportAccessResponse(allowed=True)
+
+
+@router.post("/billing/webhook")
+async def stripe_webhook(
+    request: Request,
+    stripe_signature: str | None = Header(default=None, alias="Stripe-Signature"),
+    billing_session: Session = Depends(get_billing_db),
+):
+    if not stripe_signature:
+        raise HTTPException(status_code=400, detail="Missing Stripe-Signature header.")
+    payload = await request.body()
+    try:
+        processed = process_webhook(billing_session, payload, stripe_signature)
+    except BillingConfigurationError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail="Invalid Stripe webhook signature.") from error
+    return {"received": True, "processed": processed}
 
 
 def companies_house_client() -> CompaniesHouseClient | None:
@@ -159,6 +308,8 @@ async def health(
         "companies_house": "configured" if settings.companies_house_api_key else "not_configured",
         "epc": "configured" if settings.epc_api_key else "not_configured",
         "gemini": "configured" if settings.gemini_api_key else "not_configured",
+        "supabase_auth": "configured" if settings.supabase_url and settings.supabase_publishable_key else "not_configured",
+        "stripe": "configured" if billing_configured() else "not_configured",
         "sponsor_register": "healthy" if sponsor_context else "not_ingested",
         "sponsor_dataset_version": sponsor_context.version.version_identifier if sponsor_context else None,
         "qualifications": "healthy" if qualification_context else "not_ingested",

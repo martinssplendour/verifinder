@@ -17,7 +17,15 @@ class Settings(BaseSettings):
     epc_api_key: str | None = None
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-2.5-flash"
+    supabase_url: str | None = None
+    supabase_publishable_key: str | None = None
     subject_signing_key: str | None = None
+    app_url: str = "http://localhost:3000"
+    stripe_secret_key: str | None = None
+    stripe_webhook_secret: str | None = None
+    stripe_plus_price_id: str | None = None
+    stripe_professional_price_id: str | None = None
+    stripe_portal_configuration_id: str | None = None
     raw_data_storage: str = "../raw-data"
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 

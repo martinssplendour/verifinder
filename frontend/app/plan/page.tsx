@@ -20,9 +20,10 @@ import {
   Printer,
   WalletCards,
 } from "lucide-react";
-import { createDecisionPlan } from "@/services/api";
+import { ApiError, authorizeReportDownload, createDecisionPlan } from "@/services/api";
 import { downloadPlanReport, printPlanReport } from "@/services/report";
 import type { DecisionEvidenceKind, DecisionPlanResponse, PlanRequest } from "@/types";
+import { useAccount } from "@/components/Account";
 
 const PRIORITIES = ["Housing cost", "Work sponsorship", "Study", "Schools", "Crime", "Planning", "Flood risk"];
 const KIND_LABELS: Record<DecisionEvidenceKind, string> = {
@@ -33,6 +34,7 @@ const KIND_LABELS: Record<DecisionEvidenceKind, string> = {
 };
 
 export default function PlanPage() {
+  const { account, openAccount } = useAccount();
   const [goal, setGoal] = useState("I want the best relocation plan around Manchester");
   const [location, setLocation] = useState("Manchester");
   const [budget, setBudget] = useState("");
@@ -69,6 +71,21 @@ export default function PlanPage() {
     }
   }
 
+  async function useReport(action: "download" | "print") {
+    if (!data) return;
+    setError(null);
+    try {
+      await authorizeReportDownload();
+      if (action === "download") downloadPlanReport(data);
+      else printPlanReport(data);
+    } catch (requestError) {
+      setError((requestError as Error).message);
+      if (requestError instanceof ApiError && requestError.upgradeRequired) {
+        openAccount(account?.authenticated ? "plans" : "sign-in");
+      }
+    }
+  }
+
   return (
     <div className="decision-page plan-page">
       <section className="shell decision-hero plan-hero">
@@ -100,7 +117,7 @@ export default function PlanPage() {
 
         {data && (
           <div className="plan-output" aria-live="polite">
-            <header className="plan-output-header"><div><span className="kicker">Generated decision report</span><h2>{data.title}</h2><p>{data.summary}</p><div className="standalone-report-actions"><button className="button" type="button" onClick={() => downloadPlanReport(data)}><Download size={15} />Download report</button><button className="icon-button" type="button" onClick={() => printPlanReport(data)}><Printer size={15} />Print / save PDF</button></div></div><span className="ai-mode"><Sparkles size={14} />{data.ai_mode === "gemini" ? "Gemini evidence synthesis" : "Evidence rules"}</span></header>
+            <header className="plan-output-header"><div><span className="kicker">Generated decision report</span><h2>{data.title}</h2><p>{data.summary}</p><div className="standalone-report-actions"><button className="button" type="button" onClick={() => void useReport("download")}><Download size={15} />Download report</button><button className="icon-button" type="button" onClick={() => void useReport("print")}><Printer size={15} />Print / save PDF</button></div></div><span className="ai-mode"><Sparkles size={14} />{data.ai_mode === "gemini" ? "Gemini evidence synthesis" : "Evidence rules"}</span></header>
 
             {data.questions.length > 0 && <section className="plan-questions"><div className="section-title"><HelpCircle size={18} /><div><span className="kicker">Open questions</span><h3>Answer these before calling anything “best”</h3></div></div><div className="question-grid">{data.questions.map((item) => <article key={item.id}><strong>{item.question}</strong><p>{item.why_it_matters}</p></article>)}</div></section>}
 

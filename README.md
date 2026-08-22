@@ -19,6 +19,8 @@ VeriFinder also ships two cross-dataset decision tools:
 
 Both tools work without an LLM. Setting `GEMINI_API_KEY` enables structured language interpretation and evidence-bounded plan synthesis through Google's Gemini API; the model is not allowed to query the database directly or introduce unsupported facts. `GEMINI_MODEL` controls the server-side model name and defaults to `gemini-2.5-flash`.
 
+Accounts use Supabase passwordless email authentication. All public checks remain anonymous. Free visitors receive one Ask query of up to 20 words per rolling day and one Planner result per rolling seven days; enforcement is server-side and uses an authenticated user ID or a signed anonymous cookie plus a keyed network hash. Plus and Professional subscriptions remove those limits and enable report downloads.
+
 ## Repository layout
 
 ```text
@@ -44,7 +46,9 @@ The root [`render.yaml`](render.yaml) defines one Frankfurt Starter service. A s
 
 The single service has a 6 GB encrypted persistent disk. On an empty disk it downloads the public, checksummed SQLite snapshot and verifies its SHA-256. The startup migration then exports every public table to a versioned, compressed Parquet snapshot, validates every table count, and atomically activates a DuckDB catalogue over those files. User, entitlement and billing writes use a separate Supabase PostgreSQL connection and never enter the public-data lake.
 
-The databases and Parquet snapshots are never committed to Git. The recovery asset is a 649.1 MB gzip snapshot of the 3.47 GB SQLite source and has SHA-256 `4c81a7f6a2155fdece5b735c85ff74c4544048b8652ced7e6ef1b0ee4ecc457e`. Render secrets (`TRANSACTION_DATABASE_URL`, `SUBJECT_SIGNING_KEY`, `GEMINI_API_KEY`, `COMPANIES_HOUSE_API_KEY`, and optional `EPC_API_KEY`) remain server-side.
+The databases and Parquet snapshots are never committed to Git. The recovery asset is a 649.1 MB gzip snapshot of the 3.47 GB SQLite source and has SHA-256 `4c81a7f6a2155fdece5b735c85ff74c4544048b8652ced7e6ef1b0ee4ecc457e`. Render secrets (`TRANSACTION_DATABASE_URL`, `SUBJECT_SIGNING_KEY`, `GEMINI_API_KEY`, `COMPANIES_HOUSE_API_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and optional `EPC_API_KEY`) remain server-side. Supabase and Stripe publishable identifiers are intentionally safe for the browser; no service-role or Stripe secret is exposed to Next.js.
+
+Stripe Checkout and the Stripe-hosted customer portal are created only by authenticated FastAPI routes. Subscription access is synchronized exclusively from signature-verified, idempotent webhooks into `subscriptions`; the browser cannot promote its own tier. Configure `STRIPE_PLUS_PRICE_ID`, `STRIPE_PROFESSIONAL_PRICE_ID`, and the webhook endpoint `https://verifinder.splendoure.com/api/billing/webhook` before enabling checkout.
 
 The disk-backed public-data lake keeps the requested one-service deployment and avoids an additional AWS/MinIO service. It intentionally remains single-instance; moving the same Parquet snapshots to S3-compatible storage later would remove that scaling constraint without changing the controlled query API.
 
@@ -153,6 +157,11 @@ npm run build
 - `GET /api/schools/{urn}`
 - `POST /api/intelligence/ask`
 - `POST /api/plans`
+- `GET /api/account/me`
+- `POST /api/billing/checkout`
+- `POST /api/billing/portal`
+- `POST /api/billing/report-access`
+- `POST /api/billing/webhook`
 - `GET /api/changes`
 - `GET /api/sources`
 - `GET /api/admin/summary`

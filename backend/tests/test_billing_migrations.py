@@ -25,4 +25,10 @@ def test_billing_migrations_create_only_transactional_tables(tmp_path):
     )
 
     tables = set(inspect(create_engine(f"sqlite:///{database.as_posix()}")).get_table_names())
-    assert tables == {"billing_alembic_version", "profiles", "usage_events"}
+    assert tables == {
+        "billing_alembic_version",
+        "profiles",
+        "stripe_events",
+        "subscriptions",
+        "usage_events",
+    }

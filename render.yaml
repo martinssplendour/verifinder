@@ -43,7 +43,25 @@ services:
         sync: false
       - key: SUPABASE_PROJECT_REF
         sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        value: sb_publishable_WgxPmETcd3bu6W5w6JDaOQ_1kxxAXhz
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        value: https://yftaqkthqfiwwvtcrhbj.supabase.co
+      - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+        value: sb_publishable_WgxPmETcd3bu6W5w6JDaOQ_1kxxAXhz
       - key: SUBJECT_SIGNING_KEY
+        sync: false
+      - key: APP_URL
+        value: https://verifinder.splendoure.com
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PLUS_PRICE_ID
+        sync: false
+      - key: STRIPE_PROFESSIONAL_PRICE_ID
+        sync: false
+      - key: STRIPE_PORTAL_CONFIGURATION_ID
         sync: false
       - key: RAW_DATA_STORAGE
         value: /opt/render/project/src/backend/data/raw-data

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { DecisionDrawerProvider } from "@/components/DecisionDrawer";
+import { AccountProvider } from "@/components/Account";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -13,11 +14,13 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body>
-        <DecisionDrawerProvider>
-          <Header />
-          <main>{children}</main>
-          <Footer />
-        </DecisionDrawerProvider>
+        <AccountProvider>
+          <DecisionDrawerProvider>
+            <Header />
+            <main>{children}</main>
+            <Footer />
+          </DecisionDrawerProvider>
+        </AccountProvider>
       </body>
     </html>
   );
