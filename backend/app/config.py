@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     stripe_plus_annual_price_id: str | None = None
     stripe_professional_price_id: str | None = None
     stripe_professional_annual_price_id: str | None = None
+    stripe_coin_pack_25_price_id: str | None = None
+    stripe_coin_pack_75_price_id: str | None = None
+    # Temporary aliases for Render environments created before the packs were resized.
+    stripe_coin_pack_5_price_id: str | None = None
+    stripe_coin_pack_15_price_id: str | None = None
     stripe_portal_configuration_id: str | None = None
     raw_data_storage: str = "../raw-data"
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"

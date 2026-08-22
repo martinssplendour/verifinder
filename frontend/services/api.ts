@@ -2,6 +2,7 @@ import type {
   AdminSummary,
   AreaCheckResponse,
   AskResponse,
+  AskConversationTurn,
   CompanyProfile,
   DecisionPlanResponse,
   FoodEstablishmentView,
@@ -34,6 +35,8 @@ export class ApiError extends Error {
   code?: string;
   upgradeRequired = false;
   signInRequired = false;
+  paymentRequired = false;
+  coinBalance = 0;
   resetAt?: string;
 
   constructor(message: string, detail?: Record<string, unknown>) {
@@ -42,6 +45,8 @@ export class ApiError extends Error {
     this.code = typeof detail?.code === "string" ? detail.code : undefined;
     this.upgradeRequired = detail?.upgrade_required === true;
     this.signInRequired = detail?.sign_in_required === true;
+    this.paymentRequired = detail?.payment_required === true;
+    this.coinBalance = typeof detail?.coin_balance === "number" ? detail.coin_balance : 0;
     this.resetAt = typeof detail?.reset_at === "string" ? detail.reset_at : undefined;
   }
 }
@@ -103,8 +108,33 @@ async function apiMutation<T>(path: string, method: "PATCH" | "DELETE", body?: u
   return response.json() as Promise<T>;
 }
 
-export function askVeriFinder(question: string, signal?: AbortSignal) {
-  return apiPost<AskResponse>("/intelligence/ask", { question, limit: 10 }, signal);
+export function askVeriFinder(
+  question: string,
+  conversation: AskResponse[] = [],
+  signal?: AbortSignal,
+  conversationId?: string | null,
+) {
+  const context: AskConversationTurn[] = conversation.slice(-6).map((turn) => ({
+    question: turn.question,
+    headline: turn.headline,
+    summary: turn.summary,
+    interpretation: turn.interpretation,
+    results: turn.results.slice(0, 10),
+  }));
+  return apiPost<AskResponse>(
+    "/intelligence/ask",
+    { question, limit: 10, conversation_id: conversationId || undefined, conversation: context },
+    signal,
+  );
+}
+
+export function clearAskConversation(conversationId: string, signal?: AbortSignal) {
+  return apiMutation<{ status: string }>(
+    `/intelligence/conversations/${encodeURIComponent(conversationId)}`,
+    "DELETE",
+    undefined,
+    signal,
+  );
 }
 
 export function createDecisionPlan(request: PlanRequest, signal?: AbortSignal) {
@@ -188,6 +218,10 @@ export function getAccountStatus(signal?: AbortSignal) {
 
 export function createCheckout(tier: Exclude<SubscriptionTier, "free">, cadence: "monthly" | "annual" = "monthly", signal?: AbortSignal) {
   return apiPost<{ url: string }>("/billing/checkout", { tier, cadence }, signal);
+}
+
+export function createCoinCheckout(pack: "coins_25" | "coins_75", signal?: AbortSignal) {
+  return apiPost<{ url: string }>("/billing/coins/checkout", { pack }, signal);
 }
 
 export function openBillingPortal(signal?: AbortSignal) {

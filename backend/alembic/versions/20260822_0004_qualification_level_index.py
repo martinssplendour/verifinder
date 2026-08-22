@@ -16,12 +16,11 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.create_index(
-        "ix_qualification_version_level",
-        "qualification_records",
-        ["dataset_version_id", "level"],
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_qualification_version_level "
+        "ON qualification_records (dataset_version_id, level)"
     )
 
 
 def downgrade() -> None:
-    op.drop_index("ix_qualification_version_level", table_name="qualification_records")
+    op.execute("DROP INDEX IF EXISTS ix_qualification_version_level")

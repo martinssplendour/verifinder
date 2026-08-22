@@ -10,6 +10,7 @@ from app.schemas import AskRequest, PlanRequest
 from app.services.decision_intelligence import (
     answer_question,
     build_plan,
+    contextual_interpretation,
     deterministic_interpretation,
 )
 from app.services.gemini_reasoning import _output_text
@@ -37,6 +38,29 @@ def test_technology_is_an_explicit_inference_filter():
     assert any("organisation-name" in item for item in query.assumptions)
 
 
+def test_job_question_is_not_misrepresented_as_verified_vacancies():
+    query = deterministic_interpretation(
+        AskRequest(question="Top 10 tech jobs in Sheffield", limit=10)
+    )
+    assert query.intent == "job_search"
+    assert query.location == "Sheffield"
+    assert query.industry == "technology"
+
+    response = asyncio.run(
+        answer_question(
+            sponsor_session(),
+            AskRequest(question="Top 10 tech jobs in Sheffield", limit=10),
+        )
+    )
+    assert response.results == []
+    assert response.headline == "Live job listings are not connected yet"
+    assert response.suggested_questions == [
+        "Show me technology organisations with worker sponsorship in Sheffield",
+        "Find regulated technology qualifications",
+    ]
+    assert any("live jobs or vacancies feed" in item for item in response.limitations)
+
+
 def test_ask_returns_sponsor_records_with_receipts_and_no_hiring_claim():
     session = sponsor_session()
     response = asyncio.run(
@@ -49,6 +73,60 @@ def test_ask_returns_sponsor_records_with_receipts_and_no_hiring_claim():
     assert response.results[0].title == "Northstar Labs Ltd"
     assert response.results[0].source.organisation == "UK Visas and Immigration"
     assert any("not a prediction" in item for item in response.limitations)
+
+
+def test_follow_up_inherits_prior_query_and_result_context():
+    session = sponsor_session()
+    first = asyncio.run(
+        answer_question(
+            session,
+            AskRequest(question="Top 5 companies with sponsorship in London", limit=10),
+        )
+    )
+    follow_up = AskRequest(
+        question="Which of those are in Leeds?",
+        limit=10,
+        conversation=[
+            {
+                "question": first.question,
+                "headline": first.headline,
+                "summary": first.summary,
+                "interpretation": first.interpretation,
+                "results": first.results,
+            }
+        ],
+    )
+    query = contextual_interpretation(follow_up)
+    assert query.intent == "sponsor_discovery"
+    assert query.location == "Leeds"
+    assert any("previous question" in item for item in query.assumptions)
+
+
+def test_explicit_follow_up_intent_keeps_missing_location_and_industry_filters():
+    first = asyncio.run(
+        answer_question(
+            sponsor_session(),
+            AskRequest(question="Top 5 technology jobs in Sheffield", limit=10),
+        )
+    )
+    follow_up = AskRequest(
+        question="Which of those have worker sponsorship?",
+        limit=10,
+        conversation=[
+            {
+                "question": first.question,
+                "headline": first.headline,
+                "summary": first.summary,
+                "interpretation": first.interpretation,
+                "results": first.results,
+            }
+        ],
+    )
+    query = contextual_interpretation(follow_up)
+    assert query.intent == "sponsor_discovery"
+    assert query.location == "Sheffield"
+    assert query.industry == "technology"
+    assert query.limit == 5
 
 
 def test_relocation_plan_uses_recent_sales_without_persistence():

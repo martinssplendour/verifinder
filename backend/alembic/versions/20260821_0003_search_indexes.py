@@ -16,30 +16,28 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.create_index(
-        "ix_qualification_version_normalised_number",
-        "qualification_records",
-        ["dataset_version_id", "normalised_number"],
+    # IF NOT EXISTS: models.py already defines these indexes, so replaying every
+    # migration on a fresh database has 0001_initial's create_all() create them first.
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_qualification_version_normalised_number "
+        "ON qualification_records (dataset_version_id, normalised_number)"
     )
-    op.create_index(
-        "ix_qualification_version_normalised_title",
-        "qualification_records",
-        ["dataset_version_id", "normalised_title"],
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_qualification_version_normalised_title "
+        "ON qualification_records (dataset_version_id, normalised_title)"
     )
-    op.create_index(
-        "ix_food_version_normalised_name",
-        "food_establishment_records",
-        ["dataset_version_id", "normalised_name"],
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_food_version_normalised_name "
+        "ON food_establishment_records (dataset_version_id, normalised_name)"
     )
-    op.create_index(
-        "ix_food_version_normalised_postcode",
-        "food_establishment_records",
-        ["dataset_version_id", "normalised_postcode"],
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_food_version_normalised_postcode "
+        "ON food_establishment_records (dataset_version_id, normalised_postcode)"
     )
 
 
 def downgrade() -> None:
-    op.drop_index("ix_food_version_normalised_postcode", table_name="food_establishment_records")
-    op.drop_index("ix_food_version_normalised_name", table_name="food_establishment_records")
-    op.drop_index("ix_qualification_version_normalised_title", table_name="qualification_records")
-    op.drop_index("ix_qualification_version_normalised_number", table_name="qualification_records")
+    op.execute("DROP INDEX IF EXISTS ix_food_version_normalised_postcode")
+    op.execute("DROP INDEX IF EXISTS ix_food_version_normalised_name")
+    op.execute("DROP INDEX IF EXISTS ix_qualification_version_normalised_title")
+    op.execute("DROP INDEX IF EXISTS ix_qualification_version_normalised_number")

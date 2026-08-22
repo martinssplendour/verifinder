@@ -4,7 +4,14 @@ from fastapi import Response
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from app.billing_models import BillingBase, Profile, SubscriptionTier, UsageEvent
+from app.billing_models import (
+    BillingBase,
+    CoinTransaction,
+    CoinWallet,
+    Profile,
+    SubscriptionTier,
+    UsageEvent,
+)
 from app.services.entitlements import (
     _sign,
     _verify,
@@ -13,6 +20,8 @@ from app.services.entitlements import (
     check_report_entitlement,
     get_or_create_profile,
     record_usage,
+    refund_ask_coin,
+    reserve_ask,
     resolve_subject_id,
 )
 
@@ -119,6 +128,56 @@ def test_ask_entitlement_enforces_paid_sixty_word_cap():
     result = check_ask_entitlement(session, "paid-1", " ".join(["word"] * 61))
     assert result.allowed is False
     assert "60 words" in (result.message or "")
+
+
+def test_authenticated_follow_up_atomically_spends_and_refunds_one_coin():
+    session = entitlements_session()
+    session.add(Profile(id="coin-user", tier=SubscriptionTier.FREE))
+    session.add(CoinWallet(subject_id="coin-user", balance=1))
+    session.commit()
+    record_usage(session, "coin-user", "ask", detail="First free question")
+
+    result = reserve_ask(
+        session,
+        "coin-user",
+        "What about this one?",
+        authenticated=True,
+    )
+
+    assert result.allowed is True
+    assert result.coin_reservation_id
+    assert session.get(CoinWallet, "coin-user").balance == 0
+    debit = session.query(CoinTransaction).filter_by(reason="ask").one()
+    assert debit.delta == -1
+
+    assert refund_ask_coin(session, "coin-user", result.coin_reservation_id) is True
+    assert session.get(CoinWallet, "coin-user").balance == 1
+    assert refund_ask_coin(session, "coin-user", result.coin_reservation_id) is False
+
+
+def test_used_free_allowance_requests_payment_and_sign_in_for_anonymous_user():
+    session = entitlements_session()
+    record_usage(session, "anon-paywall", "ask")
+    result = check_ask_entitlement(session, "anon-paywall", "Can I ask a follow-up?")
+    assert result.allowed is False
+    assert result.payment_required is True
+    assert result.sign_in_required is True
+
+
+def test_paid_subscription_never_spends_prepaid_coins():
+    session = entitlements_session()
+    session.add(Profile(id="plus-with-coins", tier=SubscriptionTier.PLUS))
+    session.add(CoinWallet(subject_id="plus-with-coins", balance=2))
+    session.commit()
+    result = reserve_ask(
+        session,
+        "plus-with-coins",
+        "Show me sponsors in Leeds",
+        authenticated=True,
+    )
+    assert result.allowed is True
+    assert result.coin_reservation_id is None
+    assert session.get(CoinWallet, "plus-with-coins").balance == 2
 
 
 def test_planner_entitlement_allows_one_free_plan_per_week_then_blocks():

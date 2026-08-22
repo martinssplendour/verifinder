@@ -13,10 +13,16 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.create_index("ix_property_version_town", "property_sale_records", ["dataset_version_id", "town_city"])
-    op.create_index("ix_property_version_district", "property_sale_records", ["dataset_version_id", "district"])
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_property_version_town "
+        "ON property_sale_records (dataset_version_id, town_city)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_property_version_district "
+        "ON property_sale_records (dataset_version_id, district)"
+    )
 
 
 def downgrade() -> None:
-    op.drop_index("ix_property_version_district", table_name="property_sale_records")
-    op.drop_index("ix_property_version_town", table_name="property_sale_records")
+    op.execute("DROP INDEX IF EXISTS ix_property_version_district")
+    op.execute("DROP INDEX IF EXISTS ix_property_version_town")

@@ -71,6 +71,37 @@ class StripeEvent(BillingBase):
     processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
+class CoinWallet(BillingBase):
+    """Current prepaid Ask balance for an authenticated account."""
+
+    __tablename__ = "coin_wallets"
+
+    subject_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("profiles.id", ondelete="CASCADE"), primary_key=True
+    )
+    balance: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+
+class CoinTransaction(BillingBase):
+    """Immutable coin ledger; unique references make purchases and refunds idempotent."""
+
+    __tablename__ = "coin_transactions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    subject_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("profiles.id", ondelete="CASCADE"), index=True
+    )
+    delta: Mapped[int] = mapped_column(Integer)
+    reason: Mapped[str] = mapped_column(String(40))
+    reference_id: Mapped[str] = mapped_column(String(120), unique=True)
+    balance_after: Mapped[int] = mapped_column(Integer)
+    detail: Mapped[dict | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    __table_args__ = (Index("ix_coin_transactions_subject_created", "subject_id", "created_at"),)
+
+
 class UsageEvent(BillingBase):
     __tablename__ = "usage_events"
 
@@ -83,6 +114,35 @@ class UsageEvent(BillingBase):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
     __table_args__ = (Index("ix_usage_events_subject_feature_created", "subject_id", "feature", "created_at"),)
+
+
+class AskConversation(BillingBase):
+    """Server-owned Ask thread so follow-up context survives reloads and devices."""
+
+    __tablename__ = "ask_conversations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    subject_id: Mapped[str] = mapped_column(String(64), index=True)
+    title: Mapped[str] = mapped_column(String(300))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    __table_args__ = (Index("ix_ask_conversations_subject_updated", "subject_id", "updated_at"),)
+
+
+class AskConversationRecord(BillingBase):
+    """Immutable response packet used to rebuild bounded Ask context."""
+
+    __tablename__ = "ask_conversation_records"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    conversation_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("ask_conversations.id", ondelete="CASCADE"), index=True
+    )
+    response: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    __table_args__ = (Index("ix_ask_records_conversation_created", "conversation_id", "created_at"),)
 
 
 class WatchlistEntry(BillingBase):

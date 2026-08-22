@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "check": "tsc --noEmit",
-    "lint": "eslint app components services types --max-warnings=0"
+    "lint": "eslint app components services types tests playwright.config.ts --max-warnings=0",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
@@ -19,6 +20,7 @@
   "devDependencies": {
     "@emnapi/core": "^1.11.3",
     "@emnapi/runtime": "^1.11.3",
+    "@playwright/test": "^1.55.0",
     "@types/node": "^22.10.6",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",

@@ -28,6 +28,10 @@ def test_billing_migrations_create_only_transactional_tables(tmp_path):
     tables = set(inspector.get_table_names())
     assert tables == {
         "billing_alembic_version",
+        "coin_transactions",
+        "coin_wallets",
+        "ask_conversation_records",
+        "ask_conversations",
         "profiles",
         "stripe_events",
         "subscriptions",

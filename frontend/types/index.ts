@@ -446,7 +446,7 @@ export type DecisionEvidenceKind = "verified_fact" | "calculated_finding" | "inf
 export type AiMode = "gemini" | "deterministic";
 
 export interface AskInterpretation {
-  intent: "sponsor_discovery" | "qualification_search" | "study_provider_search" | "food_search" | "property_search" | "area_check" | "general";
+  intent: "job_search" | "sponsor_discovery" | "qualification_search" | "study_provider_search" | "food_search" | "property_search" | "area_check" | "general";
   subject: string | null;
   location: string | null;
   industry: string | null;
@@ -475,14 +475,25 @@ export interface AskResult {
 
 export interface AskResponse {
   question: string;
+  conversation_id: string | null;
+  context_turns_used: number;
   interpretation: AskInterpretation;
   headline: string;
   summary: string;
   results: AskResult[];
   total: number;
   limitations: string[];
+  suggested_questions: string[];
   ai_mode: AiMode;
   generated_at: string;
+}
+
+export interface AskConversationTurn {
+  question: string;
+  headline: string;
+  summary: string;
+  interpretation: AskInterpretation;
+  results: AskResult[];
 }
 
 export interface PlanRequest {
@@ -554,6 +565,8 @@ export interface AccountStatus {
     watchlists: FeatureAllowance;
   };
   billing_configured: boolean;
+  coin_billing_configured: boolean;
+  coin_balance: number;
   has_billing_account: boolean;
 }
 

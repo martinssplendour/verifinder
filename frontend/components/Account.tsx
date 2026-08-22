@@ -109,7 +109,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     setError(null);
     const { error: authError } = await supabase.auth.signInWithOtp({
       email: email.trim(),
-      options: { emailRedirectTo: `${window.location.origin}/?auth=complete` },
+      options: { emailRedirectTo: `${window.location.origin}${window.location.pathname}?auth=complete` },
     });
     setWorking(false);
     if (authError) setError(authError.message);
@@ -186,7 +186,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
                   <article className="is-featured"><span>Plus</span><h2>{billingCadence === "annual" ? "£79" : "£8.99"} <small>/ {billingCadence === "annual" ? "year" : "month"}</small></h2><p>{billingCadence === "annual" ? "Save £28.88 compared with monthly." : "Or £79/year · save 27%."}</p><ul><li><Check size={13} />Unlimited Ask, 60-word cap</li><li><Check size={13} />Unlimited Planner and downloads</li><li><Check size={13} />Saved watchlist with change alerts</li></ul><button className="button" type="button" disabled={working || !account?.billing_configured} onClick={() => void startCheckout("plus")}><Sparkles size={14} />Choose Plus</button></article>
                   <article><span>Professional</span><h2>{billingCadence === "annual" ? "£349" : "£39"} <small>/ seat / {billingCadence === "annual" ? "year" : "month"}</small></h2><p>{billingCadence === "annual" ? "Save £119 per seat compared with monthly." : "Or £349/year per seat · save 25%."}</p><ul><li><Check size={13} />Everything in Plus, per seat</li><li><Check size={13} />Private persisted report library</li><li><Check size={13} />Operational retention workflow</li></ul><button className="button button-secondary" type="button" disabled={working || !account?.billing_configured} onClick={() => void startCheckout("professional")}><CreditCard size={14} />Choose Professional</button></article>
                 </div>
-                <p className="pricing-extras">Subscriptions renew {billingCadence === "annual" ? "yearly" : "monthly"} until cancelled; manage or cancel in Billing. One-off extras: Ask question £0.99 · extra Planner run + download £2.99.</p>
+                <p className="pricing-extras">Subscriptions renew {billingCadence === "annual" ? "yearly" : "monthly"} until cancelled; manage or cancel in Billing. Prefer pay as you go? Ask coin packs are offered when your free message is used.</p>
                 {!session && <button className="plans-sign-in" type="button" onClick={() => setView("sign-in")}>Sign in before choosing a plan</button>}
                 {account && !account.billing_configured && <p className="account-notice">Checkout is awaiting the production Stripe keys and price IDs.</p>}
               </div>
@@ -195,7 +195,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
             ) : (
               <div className="account-summary">
                 <div className="account-identity"><span><BadgeCheck size={20} /></span><div><small>Signed in as</small><strong>{session?.user.email}</strong></div><em>{account?.entitlements.tier || "free"}</em></div>
-                <div className="account-allowances"><div><strong>Ask</strong><span>{account?.entitlements.ask.allowed ? `Available · ${account.entitlements.ask.word_limit || 20}-word cap` : "Free allowance used"}</span></div><div><strong>Planner</strong><span>{account?.entitlements.planner.allowed ? "Available" : "Free allowance used"}</span></div><div><strong>Reports</strong><span>{account?.entitlements.report_download.allowed ? "Private PDFs enabled" : "£4.99 or upgrade"}</span></div><div><strong>Watchlists</strong><span>{account?.entitlements.watchlists.allowed ? "Change alerts enabled" : "Plus required"}</span></div></div>
+                <div className="account-allowances"><div><strong>Ask</strong><span>{account?.entitlements.ask.allowed ? `Available · ${account.entitlements.ask.word_limit || 20}-word cap` : "Free allowance used"}</span></div><div><strong>Ask coins</strong><span>{account?.coin_balance ?? 0} message{account?.coin_balance === 1 ? "" : "s"} available</span></div><div><strong>Planner</strong><span>{account?.entitlements.planner.allowed ? "Available" : "Free allowance used"}</span></div><div><strong>Reports</strong><span>{account?.entitlements.report_download.allowed ? "Private PDFs enabled" : "£4.99 or upgrade"}</span></div><div><strong>Watchlists</strong><span>{account?.entitlements.watchlists.allowed ? "Change alerts enabled" : "Plus required"}</span></div></div>
                 <div className="account-buttons"><button className="button" type="button" onClick={() => setView("library")}><BadgeCheck size={15} />Saved records</button><button className="button button-secondary" type="button" onClick={() => setView("plans")}><Sparkles size={15} />View plans</button>{account?.has_billing_account && <button className="button button-secondary" type="button" disabled={working} onClick={() => void manageBilling()}><CreditCard size={15} />Manage billing</button>}<button className="text-button" type="button" onClick={() => void signOut()}><LogOut size={14} />Sign out</button></div>
               </div>
             )}

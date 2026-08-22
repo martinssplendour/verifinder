@@ -81,6 +81,11 @@ INDUSTRY_NAME_TERMS = {
     "construction": ("construction", "building", "builders"),
     "hospitality": ("hotel", "restaurant", "hospitality", "catering"),
 }
+FOLLOW_UP_RE = re.compile(
+    r"\b(these|those|them|there|that|it|they|which|what about|how about|instead|also|"
+    r"previous|earlier|same|above|former|latter)\b|^(?:and|but|so|then|now|in|near|around)\b",
+    re.IGNORECASE,
+)
 
 
 def _latest_context(session: Session, source_id: str) -> tuple[DataSource, DatasetVersion] | None:
@@ -126,6 +131,10 @@ def _industry(question: str) -> str | None:
 
 def _intent(question: str) -> str:
     value = normalise_name(question)
+    if any(word in value.split() for word in ("job", "jobs", "vacancy", "vacancies", "role", "roles")) or any(
+        phrase in value for phrase in ("hiring", "job opening", "career opening", "work opportunities")
+    ):
+        return "job_search"
     if any(word in value for word in ("sponsor", "sponsorship", "skilled worker", "work visa")):
         return "sponsor_discovery"
     if any(word in value for word in ("qualification", "certificate", "certification", "diploma", "regulated course")):
@@ -147,6 +156,7 @@ def _subject(question: str, intent: str, location: str | None, industry: str | N
     value = normalise_name(question)
     value = re.sub(r"\b(top\s+\d+|find|show|give|list|best|official|regulated|check|search|for|me)\b", " ", value)
     nouns = {
+        "job_search": r"\b(jobs?|vacancies|vacancy|roles?|hiring|openings?|careers?|opportunities)\b",
         "qualification_search": r"\b(qualifications?|certificates?|certifications?|diplomas?|courses?)\b",
         "study_provider_search": r"\b(universities|university|colleges?|study providers?|student sponsors?)\b",
         "food_search": r"\b(restaurants?|food|cafes?|takeaways?|hygiene|ratings?)\b",
@@ -176,6 +186,8 @@ def deterministic_interpretation(request: AskRequest) -> AskInterpretation:
     elif "scale-up" in lowered or "scale up" in lowered:
         route = "Scale-up"
     assumptions: list[str] = []
+    if intent == "job_search":
+        assumptions.append("The question asks for live vacancies, but VeriFinder does not currently ingest a vacancies dataset.")
     if intent == "sponsor_discovery":
         assumptions.append("Results mean organisations listed on the current worker sponsor register, not employers promising a vacancy or visa.")
         if industry:
@@ -188,6 +200,29 @@ def deterministic_interpretation(request: AskRequest) -> AskInterpretation:
         sponsorship_route=route,
         limit=limit,
         assumptions=assumptions,
+    )
+
+
+def contextual_interpretation(request: AskRequest) -> AskInterpretation:
+    """Resolve explicit follow-ups from the last bounded turn without inventing facts."""
+    current = deterministic_interpretation(request)
+    if not request.conversation or not FOLLOW_UP_RE.search(request.question):
+        return current
+    previous = request.conversation[-1].interpretation
+    intent = previous.intent if current.intent == "general" else current.intent
+    supports_industry = intent in {"job_search", "sponsor_discovery", "qualification_search"}
+    supports_route = intent in {"job_search", "sponsor_discovery"}
+    same_domain = intent == previous.intent or current.intent == "general"
+    assumptions = list(dict.fromkeys([*previous.assumptions, *current.assumptions]))
+    assumptions.append("This follow-up uses the previous question and returned records as conversation context.")
+    return AskInterpretation(
+        intent=intent,
+        subject=current.subject or (previous.subject if same_domain else None),
+        location=current.location or (previous.location if intent != "qualification_search" else None),
+        industry=current.industry or (previous.industry if supports_industry else None),
+        sponsorship_route=current.sponsorship_route or (previous.sponsorship_route if supports_route else None),
+        limit=current.limit if LIMIT_RE.search(request.question) else min(request.limit, previous.limit),
+        assumptions=list(dict.fromkeys(assumptions)),
     )
 
 
@@ -498,12 +533,39 @@ async def _area_results(session: Session, query: AskInterpretation) -> tuple[lis
 
 async def answer_question(session: Session, request: AskRequest) -> AskResponse:
     settings = get_settings()
-    deterministic = deterministic_interpretation(request)
+    deterministic = contextual_interpretation(request)
     reasoner = GeminiReasoner(settings.gemini_api_key, settings.gemini_model)
-    interpreted = await reasoner.interpret_question(request.question, request.limit)
-    query = interpreted or deterministic
+    # Follow-up resolution and capability boundaries are deterministic guardrails.
+    # An LLM interpretation must not erase inherited filters or turn a vacancy
+    # request into an unsupported general answer. Skipping interpretation here
+    # also avoids paying for an unnecessary model call.
+    guarded_context = bool(request.conversation and FOLLOW_UP_RE.search(request.question))
+    interpreted = None
+    if not guarded_context and deterministic.intent != "job_search":
+        interpreted = await reasoner.interpret_question(
+            request.question,
+            request.limit,
+            request.conversation,
+        )
+    query = deterministic if guarded_context or deterministic.intent == "job_search" else (interpreted or deterministic)
+    interpreted_used = interpreted is not None and query is interpreted
     query.limit = min(query.limit, request.limit)
-    if query.intent == "sponsor_discovery":
+    suggested_questions: list[str] = []
+    if query.intent == "job_search":
+        results = []
+        limitations = [
+            "VeriFinder does not currently ingest a live jobs or vacancies feed, so it cannot verify or rank current openings.",
+            "A sponsor-licence record shows that an organisation is licensed; it does not show that the organisation is hiring or that a particular role is eligible for sponsorship.",
+        ]
+        label = "live vacancy"
+        industry_label = f"{query.industry} " if query.industry else ""
+        location_label = f" in {query.location}" if query.location else ""
+        suggested_questions = [
+            f"Show me {industry_label}organisations with worker sponsorship{location_label}".replace("  ", " "),
+        ]
+        if query.industry:
+            suggested_questions.append(f"Find regulated {query.industry} qualifications")
+    elif query.intent == "sponsor_discovery":
         results, limitations = _sponsor_results(session, query)
         label = "licensed worker sponsor"
     elif query.intent == "qualification_search":
@@ -524,21 +586,45 @@ async def answer_question(session: Session, request: AskRequest) -> AskResponse:
     else:
         results, limitations, label = [], ["Ask VeriFinder currently answers questions about sponsors, qualifications, study providers, food hygiene, property sales, and postcode area checks."], "public-data result"
     place = f" in {query.location}" if query.location else ""
-    headline = f"{len(results)} {label}{'' if len(results) == 1 else 's'}{place}"
-    summary = (
-        f"These are the strongest matches under the interpreted filters. Open a result to inspect its official source and full record."
-        if results
-        else "No records matched the interpreted filters. Review the interpretation or make the question more specific."
-    )
+    if query.intent == "job_search":
+        headline = "Live job listings are not connected yet"
+        deterministic_summary = (
+            f"I understood this as a request for {query.industry or 'job'} vacancies{place}, but I cannot "
+            "truthfully produce a current top-ten list without a verified vacancies source. I can use the connected "
+            "Home Office register to find relevant licensed worker sponsors instead."
+        )
+    elif query.intent == "general":
+        headline = "That question is outside the connected evidence"
+        deterministic_summary = (
+            "I kept your question in the conversation, but the connected records cannot answer it yet. "
+            "Try asking about sponsors, qualifications, study providers, food hygiene, property sales, or a postcode area check."
+        )
+    else:
+        headline = f"{len(results)} {label}{'' if len(results) == 1 else 's'}{place}"
+        deterministic_summary = (
+            "These are the strongest matches under the interpreted filters. Open a result to inspect its official source and full record."
+            if results
+            else "No records matched the interpreted filters. Review the interpretation or make the question more specific."
+        )
+    synthesized = None
+    if query.intent not in {"job_search", "general"}:
+        synthesized = await reasoner.summarize_answer(
+            question=request.question,
+            interpretation=query,
+            results=results,
+            conversation=request.conversation,
+            deterministic_summary=deterministic_summary,
+        )
     return AskResponse(
         question=request.question,
         interpretation=query,
         headline=headline,
-        summary=summary,
+        summary=synthesized or deterministic_summary,
         results=results,
         total=len(results),
         limitations=limitations,
-        ai_mode="gemini" if interpreted else "deterministic",
+        suggested_questions=suggested_questions,
+        ai_mode="gemini" if interpreted_used or synthesized else "deterministic",
         generated_at=datetime.now(timezone.utc),
     )
 
