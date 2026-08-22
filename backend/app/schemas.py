@@ -603,6 +603,7 @@ class AccountEntitlements(BaseModel):
     ask: FeatureAllowance
     planner: FeatureAllowance
     report_download: FeatureAllowance
+    watchlists: FeatureAllowance
 
 
 class AccountStatusResponse(BaseModel):
@@ -615,6 +616,7 @@ class AccountStatusResponse(BaseModel):
 
 class CheckoutRequest(BaseModel):
     tier: Literal["plus", "professional"]
+    cadence: Literal["monthly", "annual"] = "monthly"
 
 
 class RedirectResponse(BaseModel):
@@ -623,3 +625,65 @@ class RedirectResponse(BaseModel):
 
 class ReportAccessResponse(BaseModel):
     allowed: bool
+
+
+class SavedReportCreate(BaseModel):
+    plan: DecisionPlanResponse
+
+
+class SavedReportView(BaseModel):
+    id: str
+    source_report_id: str
+    report_type: str
+    title: str
+    mime_type: str
+    size_bytes: int
+    provenance_count: int
+    created_at: datetime
+
+
+class SavedReportReady(BaseModel):
+    report: SavedReportView
+    download_url: str
+    expires_at: datetime
+
+
+class SignedDownloadResponse(BaseModel):
+    url: str
+    expires_at: datetime
+
+
+class WatchlistEntryCreate(BaseModel):
+    entity_type: Literal["company", "area", "school", "food", "qualification", "property", "sponsor"]
+    entity_id: str = Field(min_length=1, max_length=120)
+    label: str | None = Field(default=None, max_length=300)
+
+
+class WatchlistEntryView(BaseModel):
+    id: int
+    entity_type: str
+    entity_id: str
+    label: str | None
+    notifications_enabled: bool
+    created_at: datetime
+
+
+class WatchlistEntryUpdate(BaseModel):
+    notifications_enabled: bool
+
+
+class WatchlistAlertView(BaseModel):
+    id: int
+    entity_type: str
+    entity_id: str
+    summary: str
+    detail: dict | None
+    email_status: str
+    created_at: datetime
+
+
+class OperationCheckView(BaseModel):
+    check_name: str
+    status: str
+    detail: dict | None
+    checked_at: datetime

@@ -22,15 +22,14 @@ import {
   FileText,
   LoaderCircle,
   MessageSquareText,
-  Printer,
   RefreshCw,
   Route,
   Send,
   Sparkles,
   X,
 } from "lucide-react";
-import { ApiError, askVeriFinder, authorizeReportDownload, createDecisionPlan } from "@/services/api";
-import { downloadPlanReport, printPlanReport } from "@/services/report";
+import { ApiError, askVeriFinder, createDecisionPlan, savePlanReport } from "@/services/api";
+import { downloadSignedReport } from "@/services/report";
 import type { AskResponse, DecisionPlanResponse, PlanRequest } from "@/types";
 import { useAccount } from "@/components/Account";
 
@@ -90,6 +89,7 @@ export function DecisionDrawerProvider({ children }: { children: ReactNode }) {
   const [planMessages, setPlanMessages] = useState<ChatMessage[]>(INITIAL_PLAN);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [reportLoading, setReportLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [upgradePrompt, setUpgradePrompt] = useState(false);
   const [planStage, setPlanStage] = useState<PlanStage>("goal");
@@ -217,18 +217,20 @@ export function DecisionDrawerProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function useReport(action: "download" | "print") {
+  async function downloadReport() {
     if (!planReport) return;
     setError(null);
     setUpgradePrompt(false);
+    setReportLoading(true);
     try {
-      await authorizeReportDownload();
-      if (action === "download") downloadPlanReport(planReport);
-      else printPlanReport(planReport);
+      const saved = await savePlanReport(planReport);
+      downloadSignedReport(saved.download_url);
     } catch (requestError) {
       setError((requestError as Error).message);
       setUpgradePrompt(requestError instanceof ApiError && (requestError.upgradeRequired || requestError.signInRequired));
       await refreshAccount();
+    } finally {
+      setReportLoading(false);
     }
   }
 
@@ -259,7 +261,7 @@ export function DecisionDrawerProvider({ children }: { children: ReactNode }) {
             <div ref={conversationEnd} />
           </div>
           <footer className="drawer-composer">
-            {mode === "ask" ? <form onSubmit={submitAsk}><textarea aria-label="Ask a question" rows={1} value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask a verified-data question…" /><button type="submit" disabled={loading || input.trim().length < 3} aria-label="Send question"><Send size={17} /></button></form> : planStage === "report" && planReport ? <div className="report-actions"><button className="button" type="button" onClick={() => void useReport("download")}><Download size={16} />Download report</button><button className="drawer-secondary-action" type="button" onClick={() => void useReport("print")}><Printer size={16} />Print / save PDF</button><button className="drawer-icon-action" type="button" onClick={resetPlan} aria-label="Start a new plan"><RefreshCw size={17} /></button></div> : planStage === "priorities" ? <p className="drawer-helper"><BadgeCheck size={14} />Choose any number of priorities, then continue.</p> : <form onSubmit={submitPlanText}><textarea aria-label="Reply to planner" rows={1} value={input} onChange={(event) => setInput(event.target.value)} placeholder={planPlaceholder} /><button type="submit" disabled={loading || !input.trim()} aria-label="Send reply"><Send size={17} /></button></form>}
+            {mode === "ask" ? <form onSubmit={submitAsk}><textarea aria-label="Ask a question" rows={1} value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask a verified-data question…" /><button type="submit" disabled={loading || input.trim().length < 3} aria-label="Send question"><Send size={17} /></button></form> : planStage === "report" && planReport ? <div className="report-actions"><button className="button" type="button" disabled={reportLoading} onClick={() => void downloadReport()}>{reportLoading ? <LoaderCircle className="spin" size={16} /> : <Download size={16} />}{reportLoading ? "Preparing secure PDF…" : "Save & download PDF"}</button><button className="drawer-icon-action" type="button" onClick={resetPlan} aria-label="Start a new plan"><RefreshCw size={17} /></button></div> : planStage === "priorities" ? <p className="drawer-helper"><BadgeCheck size={14} />Choose any number of priorities, then continue.</p> : <form onSubmit={submitPlanText}><textarea aria-label="Reply to planner" rows={1} value={input} onChange={(event) => setInput(event.target.value)} placeholder={planPlaceholder} /><button type="submit" disabled={loading || !input.trim()} aria-label="Send reply"><Send size={17} /></button></form>}
             <small><Database size={11} />Connected records are queried read-only. Conversation content is not saved by VeriFinder.</small>
           </footer>
         </section>

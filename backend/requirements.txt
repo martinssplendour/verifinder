@@ -10,3 +10,4 @@ httpx==0.28.1
 python-multipart==0.0.20
 stripe==15.4.0
 openpyxl==3.1.5
+reportlab==4.4.4

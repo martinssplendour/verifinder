@@ -18,7 +18,9 @@ from app.cli import (
     ingest_study_provider_files,
     ingest_welsh_qualification_file,
 )
+from app.billing_database import BillingSessionLocal
 from app.database import SessionLocal
+from app.services.watchlists import scan_for_changes
 from app.models import DataSource
 from app.services.food_loader import DATA_URL as FOOD_DATA_URL
 from app.services.food_loader import SOURCE_ID as FOOD_SOURCE_ID
@@ -173,4 +175,17 @@ def refresh_due_sources(*, only: str | None = None, force: bool = False) -> list
             results.append({"source": source_id, "status": "refreshed", **manifest})
         except Exception as error:
             results.append({"source": source_id, "status": "failed", "error": str(error)[:500]})
+
+    refreshed_any = any(item["status"] == "refreshed" for item in results)
+    if refreshed_any:
+        public_session = SessionLocal()
+        billing_session = BillingSessionLocal()
+        try:
+            alerts = scan_for_changes(public_session, billing_session)
+            results.append({"source": "watchlist-scan", "status": "scanned", "alerts_created": len(alerts)})
+        except Exception as error:
+            results.append({"source": "watchlist-scan", "status": "failed", "error": str(error)[:500]})
+        finally:
+            public_session.close()
+            billing_session.close()
     return results

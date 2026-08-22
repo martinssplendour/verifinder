@@ -4,7 +4,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Enum, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -83,3 +83,112 @@ class UsageEvent(BillingBase):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
     __table_args__ = (Index("ix_usage_events_subject_feature_created", "subject_id", "feature", "created_at"),)
+
+
+class WatchlistEntry(BillingBase):
+    __tablename__ = "watchlist_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    subject_id: Mapped[str] = mapped_column(String(64), index=True)
+    entity_type: Mapped[str] = mapped_column(String(40))
+    entity_id: Mapped[str] = mapped_column(String(120))
+    label: Mapped[str | None] = mapped_column(String(300))
+    notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    __table_args__ = (
+        Index("ix_watchlist_subject_entity", "subject_id", "entity_type", "entity_id", unique=True),
+    )
+
+
+class WatchlistAlert(BillingBase):
+    __tablename__ = "watchlist_alerts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    watchlist_entry_id: Mapped[int] = mapped_column(
+        ForeignKey("watchlist_entries.id", ondelete="CASCADE"), index=True
+    )
+    subject_id: Mapped[str] = mapped_column(String(64), index=True)
+    entity_type: Mapped[str] = mapped_column(String(40))
+    entity_id: Mapped[str] = mapped_column(String(120))
+    fingerprint: Mapped[str] = mapped_column(String(64), unique=True)
+    summary: Mapped[str] = mapped_column(Text)
+    detail: Mapped[dict | None] = mapped_column(JSON)
+    email_status: Mapped[str] = mapped_column(String(20), default="pending")
+    email_error: Mapped[str | None] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class CompanySnapshot(BillingBase):
+    __tablename__ = "company_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    company_number: Mapped[str] = mapped_column(String(12), index=True)
+    company_status: Mapped[str | None] = mapped_column(String(80))
+    sic_codes_hash: Mapped[str | None] = mapped_column(String(64))
+    accounts_next_due: Mapped[str | None] = mapped_column(String(40))
+    officer_count: Mapped[int | None] = mapped_column(Integer)
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    __table_args__ = (
+        Index("ix_company_snapshot_number_checked", "company_number", "checked_at"),
+    )
+
+
+class SavedReport(BillingBase):
+    __tablename__ = "saved_reports"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    subject_id: Mapped[str] = mapped_column(String(64), index=True)
+    source_report_id: Mapped[str] = mapped_column(String(80))
+    report_type: Mapped[str] = mapped_column(String(40), default="decision_plan")
+    title: Mapped[str] = mapped_column(String(300))
+    storage_bucket: Mapped[str] = mapped_column(String(100))
+    storage_path: Mapped[str] = mapped_column(String(700), unique=True)
+    mime_type: Mapped[str] = mapped_column(String(100), default="application/pdf")
+    size_bytes: Mapped[int] = mapped_column(BigInteger)
+    status: Mapped[str] = mapped_column(String(30), default="ready")
+    provenance_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    __table_args__ = (
+        Index("ix_saved_reports_subject_created", "subject_id", "created_at"),
+        Index("ix_saved_reports_subject_source", "subject_id", "source_report_id", unique=True),
+    )
+
+
+class WatchSnapshot(BillingBase):
+    __tablename__ = "watch_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    watchlist_entry_id: Mapped[int] = mapped_column(
+        ForeignKey("watchlist_entries.id", ondelete="CASCADE"), index=True
+    )
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    detail: Mapped[dict] = mapped_column(JSON)
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    __table_args__ = (Index("ix_watch_snapshots_entry_checked", "watchlist_entry_id", "checked_at"),)
+
+
+class OperationCheck(BillingBase):
+    __tablename__ = "operation_checks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    check_name: Mapped[str] = mapped_column(String(80), index=True)
+    status: Mapped[str] = mapped_column(String(20))
+    detail: Mapped[dict | None] = mapped_column(JSON)
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    __table_args__ = (Index("ix_operation_checks_name_checked", "check_name", "checked_at"),)
+
+
+class SchedulerLease(BillingBase):
+    __tablename__ = "scheduler_leases"
+
+    job_name: Mapped[str] = mapped_column(String(80), primary_key=True)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_status: Mapped[str | None] = mapped_column(String(20))
+    last_detail: Mapped[dict | None] = mapped_column(JSON)

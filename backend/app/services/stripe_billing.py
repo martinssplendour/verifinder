@@ -37,12 +37,15 @@ def billing_configured() -> bool:
     )
 
 
-def _price_for_tier(tier: SubscriptionTier) -> str:
+def _price_for_tier(tier: SubscriptionTier, cadence: str = "monthly") -> str:
     settings = get_settings()
-    price_id = {
-        SubscriptionTier.PLUS: settings.stripe_plus_price_id,
-        SubscriptionTier.PROFESSIONAL: settings.stripe_professional_price_id,
-    }.get(tier)
+    prices = {
+        (SubscriptionTier.PLUS, "monthly"): settings.stripe_plus_price_id,
+        (SubscriptionTier.PLUS, "annual"): settings.stripe_plus_annual_price_id,
+        (SubscriptionTier.PROFESSIONAL, "monthly"): settings.stripe_professional_price_id,
+        (SubscriptionTier.PROFESSIONAL, "annual"): settings.stripe_professional_annual_price_id,
+    }
+    price_id = prices.get((tier, cadence))
     if not price_id:
         raise BillingConfigurationError(f"The {tier.value} Stripe price is not configured.")
     return price_id
@@ -50,9 +53,9 @@ def _price_for_tier(tier: SubscriptionTier) -> str:
 
 def _tier_for_price(price_id: str | None) -> SubscriptionTier:
     settings = get_settings()
-    if price_id and price_id == settings.stripe_professional_price_id:
+    if price_id and price_id in {settings.stripe_professional_price_id, settings.stripe_professional_annual_price_id}:
         return SubscriptionTier.PROFESSIONAL
-    if price_id and price_id == settings.stripe_plus_price_id:
+    if price_id and price_id in {settings.stripe_plus_price_id, settings.stripe_plus_annual_price_id}:
         return SubscriptionTier.PLUS
     return SubscriptionTier.FREE
 
@@ -94,7 +97,7 @@ def _subscription_period_end(payload: dict[str, Any]) -> datetime | None:
 
 
 def create_checkout_session(
-    session: Session, user_id: str, email: str | None, tier: SubscriptionTier
+    session: Session, user_id: str, email: str | None, tier: SubscriptionTier, cadence: str = "monthly"
 ) -> str:
     if tier not in {SubscriptionTier.PLUS, SubscriptionTier.PROFESSIONAL}:
         raise ValueError("Checkout is only available for paid tiers.")
@@ -114,11 +117,11 @@ def create_checkout_session(
         api_key=_stripe_key(),
         mode="subscription",
         customer=subscription.customer_id,
-        line_items=[{"price": _price_for_tier(tier), "quantity": 1}],
+        line_items=[{"price": _price_for_tier(tier, cadence), "quantity": 1}],
         allow_promotion_codes=True,
         client_reference_id=user_id,
-        metadata={"verifinder_user_id": user_id, "tier": tier.value},
-        subscription_data={"metadata": {"verifinder_user_id": user_id, "tier": tier.value}},
+        metadata={"verifinder_user_id": user_id, "tier": tier.value, "cadence": cadence},
+        subscription_data={"metadata": {"verifinder_user_id": user_id, "tier": tier.value, "cadence": cadence}},
         success_url=f"{settings.app_url.rstrip('/')}?billing=success",
         cancel_url=f"{settings.app_url.rstrip('/')}?billing=cancelled",
     )

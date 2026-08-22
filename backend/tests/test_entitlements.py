@@ -112,6 +112,15 @@ def test_ask_entitlement_unlimited_for_paid_tier():
         record_usage(session, "anon-5", "ask")
 
 
+def test_ask_entitlement_enforces_paid_sixty_word_cap():
+    session = entitlements_session()
+    session.add(Profile(id="paid-1", tier=SubscriptionTier.PLUS))
+    session.commit()
+    result = check_ask_entitlement(session, "paid-1", " ".join(["word"] * 61))
+    assert result.allowed is False
+    assert "60 words" in (result.message or "")
+
+
 def test_planner_entitlement_allows_one_free_plan_per_week_then_blocks():
     session = entitlements_session()
     first = check_planner_entitlement(session, "anon-6")

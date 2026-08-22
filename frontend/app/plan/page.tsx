@@ -17,11 +17,10 @@ import {
   Save,
   Sparkles,
   Download,
-  Printer,
   WalletCards,
 } from "lucide-react";
-import { ApiError, authorizeReportDownload, createDecisionPlan } from "@/services/api";
-import { downloadPlanReport, printPlanReport } from "@/services/report";
+import { ApiError, createDecisionPlan, savePlanReport } from "@/services/api";
+import { downloadSignedReport } from "@/services/report";
 import type { DecisionEvidenceKind, DecisionPlanResponse, PlanRequest } from "@/types";
 import { useAccount } from "@/components/Account";
 
@@ -43,6 +42,7 @@ export default function PlanPage() {
   const [priorities, setPriorities] = useState<string[]>(["Housing cost", "Work sponsorship"]);
   const [data, setData] = useState<DecisionPlanResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [reportLoading, setReportLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function togglePriority(priority: string) {
@@ -71,18 +71,20 @@ export default function PlanPage() {
     }
   }
 
-  async function useReport(action: "download" | "print") {
+  async function downloadReport() {
     if (!data) return;
     setError(null);
+    setReportLoading(true);
     try {
-      await authorizeReportDownload();
-      if (action === "download") downloadPlanReport(data);
-      else printPlanReport(data);
+      const saved = await savePlanReport(data);
+      downloadSignedReport(saved.download_url);
     } catch (requestError) {
       setError((requestError as Error).message);
       if (requestError instanceof ApiError && requestError.upgradeRequired) {
         openAccount(account?.authenticated ? "plans" : "sign-in");
       }
+    } finally {
+      setReportLoading(false);
     }
   }
 
@@ -100,7 +102,7 @@ export default function PlanPage() {
 
       <section className="shell plan-workspace">
         <form className="plan-brief" onSubmit={submit}>
-          <div className="plan-form-heading"><div><span className="kicker">Decision brief</span><h2>What are you trying to achieve?</h2></div><span><Save size={14} /> Generated in your browser</span></div>
+          <div className="plan-form-heading"><div><span className="kicker">Decision brief</span><h2>What are you trying to achieve?</h2></div><span><Save size={14} /> Private PDF when saved</span></div>
           <label className="decision-field field-wide"><span>Your goal</span><textarea value={goal} onChange={(event) => setGoal(event.target.value)} rows={3} maxLength={1200} /></label>
           <div className="plan-form-grid">
             <label className="decision-field"><span><MapPin size={14} /> Target place</span><input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Town, city or full postcode" /></label>
@@ -117,7 +119,7 @@ export default function PlanPage() {
 
         {data && (
           <div className="plan-output" aria-live="polite">
-            <header className="plan-output-header"><div><span className="kicker">Generated decision report</span><h2>{data.title}</h2><p>{data.summary}</p><div className="standalone-report-actions"><button className="button" type="button" onClick={() => void useReport("download")}><Download size={15} />Download report</button><button className="icon-button" type="button" onClick={() => void useReport("print")}><Printer size={15} />Print / save PDF</button></div></div><span className="ai-mode"><Sparkles size={14} />{data.ai_mode === "gemini" ? "Gemini evidence synthesis" : "Evidence rules"}</span></header>
+            <header className="plan-output-header"><div><span className="kicker">Generated decision report</span><h2>{data.title}</h2><p>{data.summary}</p><div className="standalone-report-actions"><button className="button" type="button" disabled={reportLoading} onClick={() => void downloadReport()}>{reportLoading ? <LoaderCircle className="spin" size={15} /> : <Download size={15} />}{reportLoading ? "Preparing secure PDF…" : "Save & download PDF"}</button></div></div><span className="ai-mode"><Sparkles size={14} />{data.ai_mode === "gemini" ? "Gemini evidence synthesis" : "Evidence rules"}</span></header>
 
             {data.questions.length > 0 && <section className="plan-questions"><div className="section-title"><HelpCircle size={18} /><div><span className="kicker">Open questions</span><h3>Answer these before calling anything “best”</h3></div></div><div className="question-grid">{data.questions.map((item) => <article key={item.id}><strong>{item.question}</strong><p>{item.why_it_matters}</p></article>)}</div></section>}
 

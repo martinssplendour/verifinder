@@ -662,7 +662,7 @@ button { color: inherit; }
 /* Account and billing */
 .account-dialog-layer { position: fixed; inset: 0; z-index: 130; display: grid; place-items: center; padding: 20px; }
 .account-dialog-backdrop { position: absolute; inset: 0; width: 100%; border: 0; background: rgba(13,20,43,.5); backdrop-filter: blur(3px); }
-.account-dialog { position: relative; width: min(820px, 100%); max-height: min(760px, calc(100vh - 40px)); overflow-y: auto; border: 1px solid rgba(255,255,255,.25); border-radius: 12px; background: #fff; box-shadow: 0 28px 80px rgba(12,21,46,.3); animation: drawerFade .18s ease-out; }
+.account-dialog { position: relative; width: min(940px, 100%); max-height: min(800px, calc(100vh - 40px)); overflow-y: auto; border: 1px solid rgba(255,255,255,.25); border-radius: 12px; background: #fff; box-shadow: 0 28px 80px rgba(12,21,46,.3); animation: drawerFade .18s ease-out; }
 .account-dialog > header { min-height: 72px; padding: 14px 18px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .account-dialog > header > div { display: flex; align-items: center; gap: 10px; }
 .account-dialog > header > div > span { width: 38px; height: 38px; border-radius: 8px; display: grid; place-items: center; color: var(--brand); background: var(--brand-soft); }
@@ -681,11 +681,12 @@ button { color: inherit; }
 .account-sign-in .button { margin-top: 4px; }
 .account-sign-in > small { display: block; margin-top: 16px; color: var(--ink-soft); font-size: 9px; }
 .account-plans { padding: 24px; }
-.plan-choice-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 11px; }
+.plan-choice-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 11px; }
 .plan-choice-grid article { min-height: 315px; padding: 20px; border: 1px solid var(--line); border-radius: 9px; display: flex; flex-direction: column; background: #fff; }
 .plan-choice-grid article.is-featured { border-color: #bfc9ff; box-shadow: 0 12px 32px rgba(36,56,166,.1); }
 .plan-choice-grid article > span { color: var(--brand); font-size: 9px; font-weight: 800; text-transform: uppercase; }
 .plan-choice-grid h2 { margin: 5px 0 4px; font-size: 20px; }
+.plan-choice-grid h2 small { color: var(--ink-soft); font-size: 10px; font-weight: 600; }
 .plan-choice-grid p { margin: 0; min-height: 38px; color: var(--ink-soft); font-size: 10px; }
 .plan-choice-grid ul { margin: 17px 0 22px; padding: 0; display: grid; gap: 8px; list-style: none; }
 .plan-choice-grid li { display: flex; align-items: center; gap: 6px; color: #46516a; font-size: 10px; }
@@ -693,6 +694,33 @@ button { color: inherit; }
 .plan-choice-grid article > button { min-height: 40px; margin-top: auto; border: 1px solid var(--line-strong); border-radius: 7px; background: #f7f8fb; font-size: 10px; font-weight: 750; }
 .plan-choice-grid article > .button { color: #fff; background: var(--brand); }
 .plan-choice-grid article > .button-secondary { color: var(--brand); background: #fff; }
+.pricing-extras { margin: 14px 0 0; padding: 10px 12px; border: 1px solid #e5e8ef; border-radius: 7px; color: var(--ink-soft); background: #fafbfc; font-size: 9px; line-height: 1.5; }
+.account-library { padding: 20px 24px 26px; }
+.account-library > nav { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
+.account-library > nav button { min-height: 39px; padding: 0 12px; border: 0; border-bottom: 2px solid transparent; display: inline-flex; align-items: center; gap: 6px; color: var(--ink-soft); background: transparent; font-size: 10px; font-weight: 750; cursor: pointer; }
+.account-library > nav button.is-active { color: var(--brand); border-bottom-color: var(--brand); }
+.account-library > nav span { min-width: 18px; padding: 2px 5px; border-radius: 999px; background: #eef0f5; font-size: 8px; text-align: center; }
+.account-library-loading, .library-empty { min-height: 210px; display: grid; place-items: center; align-content: center; gap: 7px; color: var(--ink-soft); font-size: 10px; text-align: center; }
+.library-empty strong { color: var(--ink); font-size: 12px; }
+.library-empty p { margin: 0; }
+.library-list { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.library-list article { min-height: 64px; padding: 10px 12px; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 10px; }
+.library-list article:last-child { border-bottom: 0; }
+.library-list article > span { width: 34px; height: 34px; border-radius: 7px; display: grid; place-items: center; color: var(--brand); background: var(--brand-soft); }
+.library-list article > div { min-width: 0; display: grid; }
+.library-list strong { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.library-list small { margin-top: 3px; color: var(--ink-soft); font-size: 8px; }
+.library-list article > button { width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 6px; display: grid; place-items: center; color: var(--brand); background: #fff; cursor: pointer; }
+.library-list article > button.danger-action { color: var(--red); }
+.alert-list { display: grid; }
+.alert-list article { padding: 13px 2px; border-bottom: 1px solid var(--line); display: grid; gap: 3px; }
+.alert-list article > span { color: var(--brand); font-size: 8px; font-weight: 800; text-transform: uppercase; }
+.alert-list strong { font-size: 10px; }
+.alert-list small { color: var(--ink-soft); font-size: 8px; }
+.watch-action-wrap { position: relative; display: inline-flex; }
+.watch-action-wrap .is-watching { color: var(--red); border-color: #efcac7; background: var(--red-soft); }
+.watch-action-wrap > small { position: absolute; top: calc(100% + 5px); right: 0; z-index: 2; width: 220px; padding: 7px; border: 1px solid #efd0cc; border-radius: 6px; color: var(--red); background: #fff; box-shadow: var(--shadow-sm); font-size: 8px; }
+.area-watch-action { margin-top: 12px; }
 .plans-sign-in { margin: 17px auto 0; border: 0; display: block; color: var(--brand); background: transparent; font-size: 11px; font-weight: 750; cursor: pointer; }
 .account-notice, .account-message, .account-error { margin: 14px 24px 22px; padding: 10px 12px; border-radius: 7px; text-align: center; font-size: 10px; }
 .account-notice { color: #6f5300; background: var(--amber-soft); }
@@ -705,7 +733,7 @@ button { color: inherit; }
 .account-identity small { color: var(--ink-soft); font-size: 8px; }
 .account-identity strong { font-size: 12px; }
 .account-identity em { padding: 4px 7px; border-radius: 999px; color: var(--brand); background: var(--brand-soft); font-size: 8px; font-style: normal; font-weight: 800; text-transform: uppercase; }
-.account-allowances { margin-top: 13px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.account-allowances { margin-top: 13px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .account-allowances > div { padding: 13px; border: 1px solid var(--line); border-radius: 7px; display: grid; }
 .account-allowances strong { font-size: 10px; }
 .account-allowances span { margin-top: 3px; color: var(--ink-soft); font-size: 8px; }
@@ -809,7 +837,7 @@ button { color: inherit; }
 .drawer-composer form button:disabled { opacity: .45; cursor: not-allowed; }
 .drawer-composer > small { margin-top: 7px; display: flex; align-items: center; justify-content: center; gap: 4px; color: #7a8496; font-size: 8px; }
 .drawer-helper { min-height: 40px; margin: 0; display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--green); font-size: 10px; }
-.report-actions { display: grid; grid-template-columns: 1fr auto auto; gap: 7px; }
+.report-actions { display: grid; grid-template-columns: 1fr auto; gap: 7px; }
 .report-actions .button { min-height: 40px; font-size: 10px; }
 .drawer-secondary-action { min-height: 40px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 7px; display: inline-flex; align-items: center; gap: 6px; color: var(--brand); background: #fff; font-size: 9px; font-weight: 750; cursor: pointer; }
 .drawer-icon-action { width: 40px; height: 40px; border: 1px solid var(--line-strong); border-radius: 7px; display: grid; place-items: center; color: var(--ink-soft); background: #fff; cursor: pointer; }

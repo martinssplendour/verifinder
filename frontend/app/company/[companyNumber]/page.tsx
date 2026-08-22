@@ -12,7 +12,6 @@ import {
   Clock3,
   Database,
   FileText,
-  Heart,
   Landmark,
   LoaderCircle,
   MapPin,
@@ -21,6 +20,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { StatusPill } from "@/components/StatusPill";
+import { WatchButton } from "@/components/WatchButton";
 import { getCompany } from "@/services/api";
 import type { CompanyProfile, SourceAttribution } from "@/types";
 
@@ -88,7 +88,7 @@ export default function CompanyPage({ params }: { params: Promise<{ companyNumbe
         <div className="profile-topline">
           <Link className="back-link" href="/search"><ChevronLeft size={16} /> Back to search</Link>
           <div className="profile-actions">
-            <button className="icon-button" type="button" disabled title="Watchlists are coming soon"><Heart size={17} /> Watch</button>
+            <WatchButton entityType="company" entityId={profile.company_number} label={profile.company_name} />
             <button className="icon-button" type="button" onClick={share}><Share2 size={17} /> {copied ? "Copied" : "Share"}</button>
           </div>
         </div>

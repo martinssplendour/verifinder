@@ -21,6 +21,10 @@ import type {
   PlanRequest,
   AccountStatus,
   SubscriptionTier,
+  SavedReport,
+  SavedReportReady,
+  WatchlistAlert,
+  WatchlistEntry,
 } from "@/types";
 import { getAccessToken } from "@/services/supabase";
 
@@ -84,6 +88,18 @@ async function apiPost<T>(path: string, body: unknown, signal?: AbortSignal): Pr
   if (!response.ok) {
     throw await responseError(response, "VeriFinder could not complete that request.");
   }
+  return response.json() as Promise<T>;
+}
+
+async function apiMutation<T>(path: string, method: "PATCH" | "DELETE", body?: unknown, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: await requestHeaders(body !== undefined),
+    body: body === undefined ? undefined : JSON.stringify(body),
+    signal,
+    credentials: "include",
+  });
+  if (!response.ok) throw await responseError(response, "VeriFinder could not complete that request.");
   return response.json() as Promise<T>;
 }
 
@@ -170,8 +186,8 @@ export function getAccountStatus(signal?: AbortSignal) {
   return apiFetch<AccountStatus>("/account/me", signal);
 }
 
-export function createCheckout(tier: Exclude<SubscriptionTier, "free">, signal?: AbortSignal) {
-  return apiPost<{ url: string }>("/billing/checkout", { tier }, signal);
+export function createCheckout(tier: Exclude<SubscriptionTier, "free">, cadence: "monthly" | "annual" = "monthly", signal?: AbortSignal) {
+  return apiPost<{ url: string }>("/billing/checkout", { tier, cadence }, signal);
 }
 
 export function openBillingPortal(signal?: AbortSignal) {
@@ -180,4 +196,40 @@ export function openBillingPortal(signal?: AbortSignal) {
 
 export function authorizeReportDownload(signal?: AbortSignal) {
   return apiPost<{ allowed: boolean }>("/billing/report-access", {}, signal);
+}
+
+export function savePlanReport(plan: DecisionPlanResponse, signal?: AbortSignal) {
+  return apiPost<SavedReportReady>("/reports", { plan }, signal);
+}
+
+export function getSavedReports(signal?: AbortSignal) {
+  return apiFetch<SavedReport[]>("/reports", signal);
+}
+
+export function getSavedReportDownload(reportId: string, signal?: AbortSignal) {
+  return apiPost<{ url: string; expires_at: string }>(`/reports/${encodeURIComponent(reportId)}/download`, {}, signal);
+}
+
+export function deleteSavedReport(reportId: string, signal?: AbortSignal) {
+  return apiMutation<{ status: string }>(`/reports/${encodeURIComponent(reportId)}`, "DELETE", undefined, signal);
+}
+
+export function getWatchlist(signal?: AbortSignal) {
+  return apiFetch<WatchlistEntry[]>("/watchlist", signal);
+}
+
+export function addWatchlistEntry(entityType: "company" | "area", entityId: string, label: string, signal?: AbortSignal) {
+  return apiPost<WatchlistEntry>("/watchlist", { entity_type: entityType, entity_id: entityId, label }, signal);
+}
+
+export function updateWatchlistEntry(entryId: number, notificationsEnabled: boolean, signal?: AbortSignal) {
+  return apiMutation<WatchlistEntry>(`/watchlist/${entryId}`, "PATCH", { notifications_enabled: notificationsEnabled }, signal);
+}
+
+export function removeWatchlistEntry(entryId: number, signal?: AbortSignal) {
+  return apiMutation<{ status: string }>(`/watchlist/${entryId}`, "DELETE", undefined, signal);
+}
+
+export function getWatchlistAlerts(signal?: AbortSignal) {
+  return apiFetch<WatchlistAlert[]>("/watchlist/alerts", signal);
 }

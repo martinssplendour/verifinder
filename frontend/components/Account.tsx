@@ -14,10 +14,11 @@ import type { Session } from "@supabase/supabase-js";
 import { BadgeCheck, Check, CreditCard, LoaderCircle, LogOut, Mail, Sparkles, UserRound, X } from "lucide-react";
 import { createCheckout, getAccountStatus, openBillingPortal } from "@/services/api";
 import { getSupabaseClient } from "@/services/supabase";
+import { AccountLibrary } from "@/components/AccountLibrary";
 import type { AccountStatus, SubscriptionTier } from "@/types";
 
 
-type AccountView = "sign-in" | "plans" | "account";
+type AccountView = "sign-in" | "plans" | "account" | "library";
 type AccountContextValue = {
   session: Session | null;
   account: AccountStatus | null;
@@ -56,8 +57,10 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
     if (!supabase) {
-      setLoading(false);
-      void refreshAccount();
+      queueMicrotask(() => {
+        setLoading(false);
+        void refreshAccount();
+      });
       return;
     }
     void supabase.auth.getSession().then(({ data }) => {
@@ -78,13 +81,17 @@ export function AccountProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("billing") === "success") {
-      setView("account");
-      setMessage("Payment received. Your access updates as soon as Stripe confirms the subscription.");
-      window.setTimeout(() => void refreshAccount(), 1500);
-    } else if (params.get("auth") === "complete") {
-      setView("account");
-    }
+    queueMicrotask(() => {
+      if (params.get("billing") === "success") {
+        setView("account");
+        setMessage("Payment received. Your access updates as soon as Stripe confirms the subscription.");
+        window.setTimeout(() => void refreshAccount(), 1500);
+      } else if (params.get("auth") === "complete") {
+        setView("account");
+      } else if (params.get("account") === "watchlist") {
+        setView("library");
+      }
+    });
   }, [refreshAccount]);
 
   function openAccount(nextView: AccountView = session ? "account" : "sign-in") {
@@ -149,7 +156,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
           <button className="account-dialog-backdrop" type="button" onClick={() => setView(null)} aria-label="Close account dialog" />
           <section className="account-dialog" role="dialog" aria-modal="true" aria-labelledby="account-dialog-title">
             <header>
-              <div><span><UserRound size={18} /></span><div><strong id="account-dialog-title">{view === "plans" ? "Choose your access" : session ? "Your VeriFinder account" : "Sign in to VeriFinder"}</strong><small>Secure authentication by Supabase</small></div></div>
+              <div><span><UserRound size={18} /></span><div><strong id="account-dialog-title">{view === "plans" ? "Choose your access" : view === "library" ? "Saved reports & watches" : session ? "Your VeriFinder account" : "Sign in to VeriFinder"}</strong><small>Secure authentication by Supabase</small></div></div>
               <button type="button" onClick={() => setView(null)} aria-label="Close"><X size={19} /></button>
             </header>
 
@@ -168,18 +175,22 @@ export function AccountProvider({ children }: { children: ReactNode }) {
             ) : view === "plans" ? (
               <div className="account-plans">
                 <div className="plan-choice-grid">
-                  <article><span>Basic</span><h2>Free</h2><p>For occasional verified-data decisions.</p><ul><li><Check size={13} />One Ask query per day</li><li><Check size={13} />One plan per week</li><li><Check size={13} />All public checks</li></ul><button type="button" disabled>Current free access</button></article>
-                  <article className="is-featured"><span>Plus</span><h2>Unlimited AI</h2><p>For active research and planning.</p><ul><li><Check size={13} />Unlimited Ask queries</li><li><Check size={13} />Unlimited decision plans</li><li><Check size={13} />Download reports</li></ul><button className="button" type="button" disabled={working || !account?.billing_configured} onClick={() => void startCheckout("plus")}><Sparkles size={14} />Choose Plus</button></article>
-                  <article><span>Professional</span><h2>Advanced</h2><p>For repeat professional decisions.</p><ul><li><Check size={13} />Everything in Plus</li><li><Check size={13} />Professional entitlement</li><li><Check size={13} />Future saved reports</li></ul><button className="button button-secondary" type="button" disabled={working || !account?.billing_configured} onClick={() => void startCheckout("professional")}><CreditCard size={14} />Choose Professional</button></article>
+                  <article><span>Explorer</span><h2>£0</h2><p>No card required.</p><ul><li><Check size={13} />Unlimited search across all 7 checks</li><li><Check size={13} />1 Ask / day, up to 20 words</li><li><Check size={13} />1 view-only plan / week</li><li><Check size={13} />No downloads or exports</li></ul><button type="button" disabled>Current free access</button></article>
+                  <article><span>Single report</span><h2>£4.99 <small>/ report</small></h2><p>No subscription required.</p><ul><li><Check size={13} />One entity with full provenance</li><li><Check size={13} />Server-generated downloadable PDF</li><li><Check size={13} />Moving-house bundle: £9.99</li></ul><button type="button" disabled>Offered when exporting</button></article>
+                  <article className="is-featured"><span>Plus</span><h2>£8.99 <small>/ month</small></h2><p>£79/year · two months free.</p><ul><li><Check size={13} />Unlimited Ask, 60-word cap</li><li><Check size={13} />Unlimited Planner and downloads</li><li><Check size={13} />Saved watchlist with change alerts</li></ul><button className="button" type="button" disabled={working || !account?.billing_configured} onClick={() => void startCheckout("plus")}><Sparkles size={14} />Choose Plus</button></article>
+                  <article><span>Professional</span><h2>£39 <small>/ seat / month</small></h2><p>£349/year per seat.</p><ul><li><Check size={13} />Everything in Plus, per seat</li><li><Check size={13} />Private persisted report library</li><li><Check size={13} />Operational retention workflow</li></ul><button className="button button-secondary" type="button" disabled={working || !account?.billing_configured} onClick={() => void startCheckout("professional")}><CreditCard size={14} />Choose Professional</button></article>
                 </div>
+                <p className="pricing-extras">One-off extras: Ask question £0.99 · extra Planner run + download £2.99. Subscriptions renew until cancelled; manage or cancel in Billing.</p>
                 {!session && <button className="plans-sign-in" type="button" onClick={() => setView("sign-in")}>Sign in before choosing a plan</button>}
                 {account && !account.billing_configured && <p className="account-notice">Checkout is awaiting the production Stripe keys and price IDs.</p>}
               </div>
+            ) : view === "library" && session ? (
+              <AccountLibrary onError={setError} />
             ) : (
               <div className="account-summary">
                 <div className="account-identity"><span><BadgeCheck size={20} /></span><div><small>Signed in as</small><strong>{session?.user.email}</strong></div><em>{account?.entitlements.tier || "free"}</em></div>
-                <div className="account-allowances"><div><strong>Ask</strong><span>{account?.entitlements.ask.allowed ? "Available" : "Free allowance used"}</span></div><div><strong>Planner</strong><span>{account?.entitlements.planner.allowed ? "Available" : "Free allowance used"}</span></div><div><strong>Reports</strong><span>{account?.entitlements.report_download.allowed ? "Downloads enabled" : "Upgrade required"}</span></div></div>
-                <div className="account-buttons"><button className="button" type="button" onClick={() => setView("plans")}><Sparkles size={15} />View plans</button>{account?.has_billing_account && <button className="button button-secondary" type="button" disabled={working} onClick={() => void manageBilling()}><CreditCard size={15} />Manage billing</button>}<button className="text-button" type="button" onClick={() => void signOut()}><LogOut size={14} />Sign out</button></div>
+                <div className="account-allowances"><div><strong>Ask</strong><span>{account?.entitlements.ask.allowed ? `Available · ${account.entitlements.ask.word_limit || 20}-word cap` : "Free allowance used"}</span></div><div><strong>Planner</strong><span>{account?.entitlements.planner.allowed ? "Available" : "Free allowance used"}</span></div><div><strong>Reports</strong><span>{account?.entitlements.report_download.allowed ? "Private PDFs enabled" : "£4.99 or upgrade"}</span></div><div><strong>Watchlists</strong><span>{account?.entitlements.watchlists.allowed ? "Change alerts enabled" : "Plus required"}</span></div></div>
+                <div className="account-buttons"><button className="button" type="button" onClick={() => setView("library")}><BadgeCheck size={15} />Saved records</button><button className="button button-secondary" type="button" onClick={() => setView("plans")}><Sparkles size={15} />View plans</button>{account?.has_billing_account && <button className="button button-secondary" type="button" disabled={working} onClick={() => void manageBilling()}><CreditCard size={15} />Manage billing</button>}<button className="text-button" type="button" onClick={() => void signOut()}><LogOut size={14} />Sign out</button></div>
               </div>
             )}
             {message && <p className="account-message" role="status">{message}</p>}

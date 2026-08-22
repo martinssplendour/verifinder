@@ -45,6 +45,8 @@ services:
         sync: false
       - key: SUPABASE_PUBLISHABLE_KEY
         value: sb_publishable_WgxPmETcd3bu6W5w6JDaOQ_1kxxAXhz
+      - key: SUPABASE_SECRET_KEY
+        sync: false
       - key: NEXT_PUBLIC_SUPABASE_URL
         value: https://yftaqkthqfiwwvtcrhbj.supabase.co
       - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
@@ -59,7 +61,11 @@ services:
         sync: false
       - key: STRIPE_PLUS_PRICE_ID
         sync: false
+      - key: STRIPE_PLUS_ANNUAL_PRICE_ID
+        sync: false
       - key: STRIPE_PROFESSIONAL_PRICE_ID
+        sync: false
+      - key: STRIPE_PROFESSIONAL_ANNUAL_PRICE_ID
         sync: false
       - key: STRIPE_PORTAL_CONFIGURATION_ID
         sync: false
@@ -74,6 +80,20 @@ services:
       - key: COMPANIES_HOUSE_API_KEY
         sync: false
       - key: EPC_API_KEY
+        sync: false
+      - key: EMAIL_API_KEY
+        sync: false
+      - key: NOTIFICATION_FROM_EMAIL
+        value: "VeriFinder Alerts <alerts@verifinder.splendoure.com>"
+      - key: REPORT_STORAGE_BUCKET
+        value: verifinder-reports
+      - key: REPORT_SIGNED_URL_TTL_SECONDS
+        value: 300
+      - key: SCHEDULER_ENABLED
+        value: true
+      - key: SCHEDULER_INTERVAL_MINUTES
+        value: 360
+      - key: SUPABASE_BACKUPS_VERIFIED_AT
         sync: false
       - key: DATABASE_SNAPSHOT_URL
         value: https://github.com/martinssplendour/verifinder/releases/download/data-2026-08-22/verifinder.sqlite3.gz

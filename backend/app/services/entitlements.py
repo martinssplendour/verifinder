@@ -18,6 +18,7 @@ from app.config import get_settings
 COOKIE_NAME = "vf_subject"
 COOKIE_MAX_AGE = 60 * 60 * 24 * 365
 ASK_FREE_LIMIT_WORDS = 20
+ASK_PAID_LIMIT_WORDS = 60
 ASK_FREE_WINDOW = timedelta(days=1)
 PLANNER_FREE_WINDOW = timedelta(days=7)
 PAID_STATUSES = {"active", "trialing"}
@@ -177,6 +178,14 @@ def check_ask_entitlement(
 ) -> EntitlementResult:
     tier = effective_tier(session, subject_id)
     if tier != SubscriptionTier.FREE:
+        word_count = len(question.split())
+        if word_count > ASK_PAID_LIMIT_WORDS:
+            return EntitlementResult(
+                allowed=False,
+                tier=tier,
+                code="ask_word_limit",
+                message=f"Ask VeriFinder accepts up to {ASK_PAID_LIMIT_WORDS} words per question (this one is {word_count}).",
+            )
         return EntitlementResult(allowed=True, tier=tier)
     word_count = len(question.split())
     if word_count > ASK_FREE_LIMIT_WORDS:
@@ -226,7 +235,18 @@ def check_report_entitlement(session: Session, subject_id: str) -> EntitlementRe
     return EntitlementResult(
         allowed=False,
         code="report_upgrade_required",
-        message="Report downloads require a Plus or Professional subscription.",
+        message="PDF reports are available with Plus or Professional, or as a £4.99 single report.",
+    )
+
+
+def check_watchlist_entitlement(session: Session, subject_id: str) -> EntitlementResult:
+    tier = effective_tier(session, subject_id)
+    if tier != SubscriptionTier.FREE:
+        return EntitlementResult(allowed=True, tier=tier)
+    return EntitlementResult(
+        allowed=False,
+        code="watchlist_upgrade_required",
+        message="Saved watchlists and change alerts are included with Plus and Professional.",
     )
 
 
@@ -288,7 +308,7 @@ def entitlement_snapshot(
         "tier": tier.value,
         "ask": {
             "allowed": paid or ask_first is None,
-            "word_limit": None if paid else ASK_FREE_LIMIT_WORDS,
+            "word_limit": ASK_PAID_LIMIT_WORDS if paid else ASK_FREE_LIMIT_WORDS,
             "reset_at": ask_first + ASK_FREE_WINDOW if ask_first else None,
         },
         "planner": {
@@ -296,4 +316,5 @@ def entitlement_snapshot(
             "reset_at": planner_first + PLANNER_FREE_WINDOW if planner_first else None,
         },
         "report_download": {"allowed": paid},
+        "watchlists": {"allowed": paid},
     }

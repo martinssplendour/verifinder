@@ -1,3 +1,5 @@
+import asyncio
+import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
@@ -19,6 +21,7 @@ from app.schemas import (
     FoodEstablishmentView,
     FoodSearchResponse,
     Officer,
+    OperationCheckView,
     QualificationRecordView,
     QualificationSearchResponse,
     PropertyDetail,
@@ -32,10 +35,18 @@ from app.schemas import (
     PlanRequest,
     RedirectResponse,
     ReportAccessResponse,
+    SavedReportCreate,
+    SavedReportReady,
+    SavedReportView,
+    SignedDownloadResponse,
     StudyProviderDetail,
     StudyProviderSearchResponse,
     SourceAttribution,
     SourceRegistryItem,
+    WatchlistAlertView,
+    WatchlistEntryCreate,
+    WatchlistEntryUpdate,
+    WatchlistEntryView,
 )
 from app.services.area_lookup import get_area_check, latest_postcode_context
 from app.services.area_sources import FLOOD_URL, PLANNING_URL, POLICE_URL
@@ -80,10 +91,27 @@ from app.services.decision_intelligence import answer_question, build_plan
 from app.services.auth import RequestIdentity, identity_dependency, require_authenticated
 from app.services.entitlements import (
     check_report_entitlement,
+    check_watchlist_entitlement,
     entitlement_snapshot,
     get_or_create_profile,
     reserve_ask,
     reserve_planner,
+)
+from app.services.watchlists import (
+    add_watchlist_entry,
+    list_alerts,
+    list_watchlist,
+    remove_watchlist_entry,
+    set_watchlist_notifications,
+)
+from app.services.reports import (
+    ReportStorageError,
+    build_plan_pdf,
+    delete_pdf,
+    list_saved_reports,
+    report_storage_configured,
+    signed_download_url,
+    upload_pdf,
 )
 from app.services.stripe_billing import (
     BillingConfigurationError,
@@ -92,7 +120,9 @@ from app.services.stripe_billing import (
     create_portal_session,
     process_webhook,
 )
-from app.billing_models import Profile, SubscriptionTier
+from app.billing_models import OperationCheck, Profile, SavedReport, SchedulerLease, SubscriptionTier
+from app.services.notifications import email_configured
+from app.services.operations import JOB_NAME
 
 
 router = APIRouter()
@@ -189,6 +219,7 @@ async def billing_checkout(
             identity.subject_id,
             identity.email,
             SubscriptionTier(request.tier),
+            request.cadence,
         )
     except BillingConfigurationError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
@@ -219,6 +250,113 @@ async def report_access(
     if not result.allowed:
         raise _entitlement_error(result)
     return ReportAccessResponse(allowed=True)
+
+
+def _saved_report_view(report: SavedReport) -> SavedReportView:
+    return SavedReportView(
+        id=report.id,
+        source_report_id=report.source_report_id,
+        report_type=report.report_type,
+        title=report.title,
+        mime_type=report.mime_type,
+        size_bytes=report.size_bytes,
+        provenance_count=report.provenance_count,
+        created_at=report.created_at,
+    )
+
+
+@router.post("/reports", response_model=SavedReportReady)
+async def save_report(
+    request: SavedReportCreate,
+    billing_session: Session = Depends(get_billing_db),
+    identity: RequestIdentity = Depends(identity_dependency),
+):
+    result = check_report_entitlement(billing_session, identity.subject_id)
+    if not result.allowed:
+        raise _entitlement_error(result)
+    if not report_storage_configured():
+        raise HTTPException(status_code=503, detail="Private report storage is not configured.")
+    existing = billing_session.scalar(
+        select(SavedReport).where(
+            SavedReport.subject_id == identity.subject_id,
+            SavedReport.source_report_id == request.plan.id,
+            SavedReport.status == "ready",
+        )
+    )
+    try:
+        if existing:
+            url, expires_at = await signed_download_url(existing.storage_path)
+            return SavedReportReady(report=_saved_report_view(existing), download_url=url, expires_at=expires_at)
+
+        report_id = str(uuid.uuid4())
+        storage_path = f"{identity.subject_id}/{datetime.now(timezone.utc):%Y/%m}/{report_id}.pdf"
+        pdf = await asyncio.to_thread(build_plan_pdf, request.plan)
+        await upload_pdf(storage_path, pdf)
+        report = SavedReport(
+            id=report_id,
+            subject_id=identity.subject_id,
+            source_report_id=request.plan.id,
+            title=request.plan.title,
+            storage_bucket=settings.report_storage_bucket,
+            storage_path=storage_path,
+            size_bytes=len(pdf),
+            provenance_count=sum(1 for item in request.plan.evidence if item.source is not None),
+        )
+        billing_session.add(report)
+        try:
+            billing_session.commit()
+        except Exception:
+            billing_session.rollback()
+            await delete_pdf(storage_path)
+            raise
+        url, expires_at = await signed_download_url(storage_path)
+    except ReportStorageError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    return SavedReportReady(report=_saved_report_view(report), download_url=url, expires_at=expires_at)
+
+
+@router.get("/reports", response_model=list[SavedReportView])
+async def get_saved_reports(
+    billing_session: Session = Depends(get_billing_db),
+    identity: RequestIdentity = Depends(identity_dependency),
+):
+    require_authenticated(identity)
+    return [_saved_report_view(report) for report in list_saved_reports(billing_session, identity.subject_id)]
+
+
+@router.post("/reports/{report_id}/download", response_model=SignedDownloadResponse)
+async def get_report_download(
+    report_id: str,
+    billing_session: Session = Depends(get_billing_db),
+    identity: RequestIdentity = Depends(identity_dependency),
+):
+    report = billing_session.get(SavedReport, report_id)
+    if report is None or report.subject_id != identity.subject_id or report.status != "ready":
+        raise HTTPException(status_code=404, detail="Saved report not found.")
+    try:
+        url, expires_at = await signed_download_url(report.storage_path)
+    except ReportStorageError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    return SignedDownloadResponse(url=url, expires_at=expires_at)
+
+
+@router.delete("/reports/{report_id}")
+async def remove_saved_report(
+    report_id: str,
+    billing_session: Session = Depends(get_billing_db),
+    identity: RequestIdentity = Depends(identity_dependency),
+):
+    require_authenticated(identity)
+    report = billing_session.get(SavedReport, report_id)
+    if report is None or report.subject_id != identity.subject_id:
+        raise HTTPException(status_code=404, detail="Saved report not found.")
+    try:
+        await delete_pdf(report.storage_path)
+    except ReportStorageError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    billing_session.delete(report)
+    billing_session.commit()
+    return {"status": "removed"}
 
 
 @router.post("/billing/webhook")
@@ -310,6 +448,8 @@ async def health(
         "gemini": "configured" if settings.gemini_api_key else "not_configured",
         "supabase_auth": "configured" if settings.supabase_url and settings.supabase_publishable_key else "not_configured",
         "stripe": "configured" if billing_configured() else "not_configured",
+        "report_storage": "configured" if report_storage_configured() else "not_configured",
+        "email_notifications": "configured" if email_configured() else "not_configured",
         "sponsor_register": "healthy" if sponsor_context else "not_ingested",
         "sponsor_dataset_version": sponsor_context.version.version_identifier if sponsor_context else None,
         "qualifications": "healthy" if qualification_context else "not_ingested",
@@ -331,6 +471,34 @@ async def health(
         "police_uk": "configured",
         "planning_data": "configured",
         "flood_monitoring": "configured",
+    }
+
+
+@router.get("/operations/status")
+async def operations_status(billing_session: Session = Depends(get_billing_db)) -> dict:
+    recent = list(
+        billing_session.scalars(select(OperationCheck).order_by(OperationCheck.checked_at.desc()).limit(100))
+    )
+    latest: dict[str, OperationCheckView] = {}
+    for check in recent:
+        if check.check_name not in latest:
+            latest[check.check_name] = OperationCheckView(
+                check_name=check.check_name,
+                status=check.status,
+                detail=check.detail,
+                checked_at=check.checked_at,
+            )
+    lease = billing_session.get(SchedulerLease, JOB_NAME)
+    return {
+        "status": "ok" if latest and all(item.status != "failed" for item in latest.values()) else "attention",
+        "scheduler": {
+            "enabled": settings.scheduler_enabled,
+            "interval_minutes": settings.scheduler_interval_minutes,
+            "last_started_at": lease.last_started_at if lease else None,
+            "last_finished_at": lease.last_finished_at if lease else None,
+            "last_status": lease.last_status if lease else "not_run",
+        },
+        "checks": list(latest.values()),
     }
 
 
@@ -856,3 +1024,92 @@ async def admin_summary(session: Session = Depends(get_read_db)):
         ),
         "generated_at": datetime.now(timezone.utc),
     }
+
+
+def _watchlist_entry_view(entry) -> WatchlistEntryView:
+    return WatchlistEntryView(
+        id=entry.id,
+        entity_type=entry.entity_type,
+        entity_id=entry.entity_id,
+        label=entry.label,
+        notifications_enabled=entry.notifications_enabled,
+        created_at=entry.created_at,
+    )
+
+
+def _watchlist_alert_view(alert) -> WatchlistAlertView:
+    return WatchlistAlertView(
+        id=alert.id,
+        entity_type=alert.entity_type,
+        entity_id=alert.entity_id,
+        summary=alert.summary,
+        detail=alert.detail,
+        email_status=alert.email_status,
+        created_at=alert.created_at,
+    )
+
+
+@router.post("/watchlist", response_model=WatchlistEntryView)
+async def add_to_watchlist(
+    request: WatchlistEntryCreate,
+    billing_session: Session = Depends(get_billing_db),
+    identity: RequestIdentity = Depends(identity_dependency),
+):
+    require_authenticated(identity)
+    entitlement = check_watchlist_entitlement(billing_session, identity.subject_id)
+    if not entitlement.allowed:
+        raise _entitlement_error(entitlement)
+    try:
+        entry = add_watchlist_entry(
+            billing_session, identity.subject_id, request.entity_type, request.entity_id, request.label
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return _watchlist_entry_view(entry)
+
+
+@router.patch("/watchlist/{entry_id}", response_model=WatchlistEntryView)
+async def update_watchlist_entry(
+    entry_id: int,
+    request: WatchlistEntryUpdate,
+    billing_session: Session = Depends(get_billing_db),
+    identity: RequestIdentity = Depends(identity_dependency),
+):
+    require_authenticated(identity)
+    entry = set_watchlist_notifications(
+        billing_session, identity.subject_id, entry_id, request.notifications_enabled
+    )
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Watchlist entry not found.")
+    return _watchlist_entry_view(entry)
+
+
+@router.delete("/watchlist/{entry_id}")
+async def remove_from_watchlist(
+    entry_id: int,
+    billing_session: Session = Depends(get_billing_db),
+    identity: RequestIdentity = Depends(identity_dependency),
+):
+    require_authenticated(identity)
+    if not remove_watchlist_entry(billing_session, identity.subject_id, entry_id):
+        raise HTTPException(status_code=404, detail="Watchlist entry not found.")
+    return {"status": "removed"}
+
+
+@router.get("/watchlist", response_model=list[WatchlistEntryView])
+async def get_watchlist(
+    billing_session: Session = Depends(get_billing_db),
+    identity: RequestIdentity = Depends(identity_dependency),
+):
+    require_authenticated(identity)
+    return [_watchlist_entry_view(entry) for entry in list_watchlist(billing_session, identity.subject_id)]
+
+
+@router.get("/watchlist/alerts", response_model=list[WatchlistAlertView])
+async def get_watchlist_alerts(
+    limit: int = Query(default=50, ge=1, le=200),
+    billing_session: Session = Depends(get_billing_db),
+    identity: RequestIdentity = Depends(identity_dependency),
+):
+    require_authenticated(identity)
+    return [_watchlist_alert_view(alert) for alert in list_alerts(billing_session, identity.subject_id, limit)]

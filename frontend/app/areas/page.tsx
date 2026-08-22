@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ArrowUpRight, BarChart3, CircleAlert, Landmark, LoaderCircle, MapPin, SearchX, ShieldAlert, Waves } from "lucide-react";
 import { DatasetSearchForm } from "@/components/DatasetSearchForm";
+import { WatchButton } from "@/components/WatchButton";
 import { checkArea } from "@/services/api";
 import type { AreaCheckResponse } from "@/types";
 
@@ -38,7 +39,7 @@ function AreaResults() {
     <div className="shell search-page engine-search-page area-check-page">
       <Link className="back-link" href="/">← Back to home</Link>
       <div className="search-page-heading">
-        <div><span className="kicker">Area Check</span><h1>{current ? current.postcode.postcode : "Understand a postcode"}</h1><p>Check recent street-level crime, active flood warnings and selected planning designations.</p></div>
+        <div><span className="kicker">Area Check</span><h1>{current ? current.postcode.postcode : "Understand a postcode"}</h1><p>Check recent street-level crime, active flood warnings and selected planning designations.</p>{current && <div className="area-watch-action"><WatchButton entityType="area" entityId={current.postcode.postcode} label={`Area ${current.postcode.postcode}`} /></div>}</div>
         <div className="search-page-box"><DatasetSearchForm action="/areas" initialValue={query} label="Check a postcode" placeholder="Enter a full postcode, e.g. N1C 4AB" /></div>
       </div>
       <div className="engine-scope-note area-scope-note"><MapPin size={18} /><p><strong>Postcode-level context:</strong> this combines a downloaded Ordnance Survey postcode point with current official APIs. It is not an address-level risk assessment.</p></div>

@@ -31,4 +31,11 @@ def test_billing_migrations_create_only_transactional_tables(tmp_path):
         "stripe_events",
         "subscriptions",
         "usage_events",
+        "watchlist_entries",
+        "watchlist_alerts",
+        "company_snapshots",
+        "saved_reports",
+        "watch_snapshots",
+        "operation_checks",
+        "scheduler_leases",
     }
