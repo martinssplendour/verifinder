@@ -20,7 +20,6 @@ def upgrade() -> None:
         sa.Column("subject_id", sa.String(length=64), nullable=False),
         sa.Column("balance", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["subject_id"], ["profiles.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("subject_id"),
         sa.CheckConstraint("balance >= 0", name="ck_coin_wallets_non_negative"),
     )
@@ -34,7 +33,6 @@ def upgrade() -> None:
         sa.Column("balance_after", sa.Integer(), nullable=False),
         sa.Column("detail", sa.JSON(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["subject_id"], ["profiles.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("reference_id"),
     )

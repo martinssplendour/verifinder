@@ -46,3 +46,7 @@ def test_billing_migrations_create_only_transactional_tables(tmp_path):
     }
     alert_columns = {column["name"] for column in inspector.get_columns("watchlist_alerts")}
     assert "fingerprint" in alert_columns
+    # Coin ledgers intentionally avoid REFERENCES on profiles because the
+    # Supabase migration role may not own that pre-existing table.
+    assert inspector.get_foreign_keys("coin_wallets") == []
+    assert inspector.get_foreign_keys("coin_transactions") == []

@@ -76,9 +76,10 @@ class CoinWallet(BillingBase):
 
     __tablename__ = "coin_wallets"
 
-    subject_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("profiles.id", ondelete="CASCADE"), primary_key=True
-    )
+    # Profiles can be owned by a different Supabase database role. Keep this
+    # ledger keyed by the verified subject without requiring REFERENCES on the
+    # pre-existing profiles table during production migrations.
+    subject_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     balance: Mapped[int] = mapped_column(Integer, default=0)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
@@ -89,9 +90,7 @@ class CoinTransaction(BillingBase):
     __tablename__ = "coin_transactions"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    subject_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("profiles.id", ondelete="CASCADE"), index=True
-    )
+    subject_id: Mapped[str] = mapped_column(String(64), index=True)
     delta: Mapped[int] = mapped_column(Integer)
     reason: Mapped[str] = mapped_column(String(40))
     reference_id: Mapped[str] = mapped_column(String(120), unique=True)
