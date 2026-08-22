@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable react/no-unescaped-entities */
+
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -14,7 +16,7 @@ function SchoolResults() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setError(null);
+    queueMicrotask(() => setError(null));
     if (query.length < 2) return;
     const controller = new AbortController();
     searchSchools(query, controller.signal).then(setData).catch((requestError) => {

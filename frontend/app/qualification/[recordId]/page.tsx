@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, Award, BadgeCheck, BookOpen, ChevronLeft, CircleAlert, Clock3, Database, GraduationCap, Languages, LoaderCircle } from "lucide-react";
+import { ArrowUpRight, Award, BadgeCheck, BookOpen, ChevronLeft, CircleAlert, Database, GraduationCap, Languages, LoaderCircle } from "lucide-react";
 import { StatusPill } from "@/components/StatusPill";
 import { getQualification } from "@/services/api";
 import type { QualificationRecordView } from "@/types";

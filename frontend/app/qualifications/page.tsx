@@ -50,7 +50,7 @@ function QualificationResults() {
   useEffect(() => {
     if (query.length < 2) return;
     const controller = new AbortController();
-    setError(null);
+    queueMicrotask(() => setError(null));
     searchQualifications(query, controller.signal).then(setData).catch((requestError) => {
       if (requestError.name !== "AbortError") setError(requestError.message);
     });

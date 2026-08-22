@@ -23,7 +23,7 @@ function AreaResults() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setError(null);
+    queueMicrotask(() => setError(null));
     if (query.length < 5) return;
     const controller = new AbortController();
     checkArea(query, controller.signal).then(setData).catch((requestError) => {

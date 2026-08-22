@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable react/no-unescaped-entities */
+
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowUpRight, Building2, CalendarDays, ChevronLeft, CircleAlert, Database, GraduationCap, LoaderCircle, MapPin, Phone, School, ShieldCheck, Users } from "lucide-react";

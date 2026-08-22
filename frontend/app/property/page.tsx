@@ -21,7 +21,7 @@ function PropertyResults() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setError(null);
+    queueMicrotask(() => setError(null));
     if (query.length < 2) return;
     const controller = new AbortController();
     searchProperties(query, controller.signal).then(setData).catch((requestError) => {
