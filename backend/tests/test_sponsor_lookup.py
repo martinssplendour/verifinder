@@ -101,6 +101,41 @@ def test_sponsor_register_can_be_searched_by_partial_company_name():
     assert lab_result.routes == ["Scale-up", "Skilled Worker"]
 
 
+def test_whole_word_match_excludes_longer_prefix_lookalikes():
+    session = sponsor_session()
+    session.add_all(
+        [
+            SponsorRecord(
+                dataset_version_id="version-1",
+                source_record_key="d" * 64,
+                organisation_name="Revolut Ltd",
+                normalised_name="revolut limited",
+                town_city="London",
+                county=None,
+                sponsor_rating="Worker (A rating)",
+                routes=["Skilled Worker"],
+                active=True,
+                raw_record=[],
+            ),
+            SponsorRecord(
+                dataset_version_id="version-1",
+                source_record_key="e" * 64,
+                organisation_name="Revolution Energy Services",
+                normalised_name="revolution energy services",
+                town_city="Tonbridge",
+                county="Kent",
+                sponsor_rating="Worker (A rating)",
+                routes=["Skilled Worker"],
+                active=True,
+                raw_record=[],
+            ),
+        ]
+    )
+    session.commit()
+    results, _ = search_sponsor_records(session, "Revolut", limit=10)
+    assert [result.organisation_name for result in results] == ["Revolut Ltd"]
+
+
 def test_sponsor_record_detail_is_limited_to_latest_version():
     session = sponsor_session()
     results, _ = search_sponsor_records(session, "Northstar Labs", limit=5)

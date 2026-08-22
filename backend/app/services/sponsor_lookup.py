@@ -119,6 +119,14 @@ def search_sponsor_records(session: Session, query: str, limit: int = 8) -> tupl
             seen = {record.id for record in candidates}
             candidates.extend(record for record in fuzzy if record.id not in seen)
 
+    whole_phrase_matches = [
+        record
+        for record in candidates
+        if f" {normalised_query} " in f" {record.normalised_name} "
+    ]
+    if whole_phrase_matches:
+        candidates = whole_phrase_matches
+
     def score(record: SponsorRecord) -> float:
         record_normalised = record.normalised_name
         record_comparison = comparison_name(record.organisation_name)
