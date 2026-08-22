@@ -40,6 +40,9 @@ PUBLIC_TABLES = (
 MANIFEST_VERSION = 1
 IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]*$")
 SNAPSHOT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+STAGING_DIRECTORY = re.compile(r"^\.staging-[0-9a-f]{32}$")
+DUCKDB_MEMORY_LIMIT = os.getenv("PUBLIC_DATA_EXPORT_MEMORY_LIMIT", "192MB")
+DUCKDB_MAX_TEMP_SIZE = os.getenv("PUBLIC_DATA_EXPORT_MAX_TEMP_SIZE", "1GB")
 
 
 def _identifier(value: str) -> str:
@@ -52,8 +55,15 @@ def _literal(value: str | Path) -> str:
     return f"'{str(value).replace("'", "''")}'"
 
 
-def _connect() -> duckdb.DuckDBPyConnection:
+def _connect(temp_directory: Path | None = None) -> duckdb.DuckDBPyConnection:
     connection = duckdb.connect()
+    connection.execute(f"SET memory_limit = {_literal(DUCKDB_MEMORY_LIMIT)}")
+    connection.execute("SET threads = 1")
+    connection.execute("SET preserve_insertion_order = false")
+    if temp_directory is not None:
+        temp_directory.mkdir(parents=True, exist_ok=True)
+        connection.execute(f"SET temp_directory = {_literal(temp_directory.as_posix())}")
+        connection.execute(f"SET max_temp_directory_size = {_literal(DUCKDB_MAX_TEMP_SIZE)}")
     try:
         connection.execute("LOAD sqlite")
     except duckdb.Error:
@@ -65,6 +75,21 @@ def _connect() -> duckdb.DuckDBPyConnection:
 def _remove_staging(root: Path, staging: Path) -> None:
     if staging.parent == root and staging.name.startswith(".staging-") and not staging.is_symlink():
         shutil.rmtree(staging, ignore_errors=True)
+
+
+def _remove_interrupted_exports(root: Path) -> None:
+    if not root.is_dir():
+        return
+    for candidate in root.iterdir():
+        if (
+            candidate.is_dir()
+            and not candidate.is_symlink()
+            and STAGING_DIRECTORY.fullmatch(candidate.name)
+        ):
+            _remove_staging(root, candidate)
+    temporary = root / ".duckdb-export-tmp"
+    if temporary.is_dir() and not temporary.is_symlink():
+        shutil.rmtree(temporary)
 
 
 def _sqlite_tables(source: Path) -> set[str]:
@@ -93,11 +118,14 @@ def export_sqlite_to_parquet(source: Path, root: Path, snapshot_id: str | None =
     destination = snapshots / snapshot_id
     if destination.exists():
         raise FileExistsError(f"Snapshot already exists: {destination}")
+    root.mkdir(parents=True, exist_ok=True)
+    _remove_interrupted_exports(root)
     staging = root / f".staging-{uuid.uuid4().hex}"
     staging.mkdir(parents=True, exist_ok=False)
+    temp_directory = root / ".duckdb-export-tmp"
 
     manifest_tables: dict[str, dict[str, int | str]] = {}
-    connection = _connect()
+    connection = _connect(temp_directory)
     try:
         connection.execute(f"ATTACH {_literal(source.as_posix())} AS source (TYPE sqlite)")
         for table in PUBLIC_TABLES:
@@ -106,7 +134,7 @@ def export_sqlite_to_parquet(source: Path, root: Path, snapshot_id: str | None =
             row_count = connection.execute(f"SELECT count(*) FROM source.{quoted}").fetchone()[0]
             connection.execute(
                 f"COPY (SELECT * FROM source.{quoted}) TO {_literal(parquet_file.as_posix())} "
-                "(FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 100000)"
+                "(FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 25000, PER_THREAD_OUTPUT false)"
             )
             manifest_tables[table] = {
                 "file": parquet_file.name,
@@ -118,6 +146,8 @@ def export_sqlite_to_parquet(source: Path, root: Path, snapshot_id: str | None =
         raise
     finally:
         connection.close()
+        if temp_directory.is_dir() and not temp_directory.is_symlink():
+            shutil.rmtree(temp_directory)
 
     manifest = {
         "manifest_version": MANIFEST_VERSION,
