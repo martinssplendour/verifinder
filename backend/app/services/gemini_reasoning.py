@@ -50,7 +50,14 @@ class GeminiReasoner:
     def configured(self) -> bool:
         return bool(self.api_key and self.model)
 
-    async def _structured(self, *, instructions: str, input_text: str, schema: dict) -> dict:
+    async def _structured(
+        self,
+        *,
+        instructions: str,
+        input_text: str,
+        schema: dict,
+        max_output_tokens: int = 900,
+    ) -> dict:
         if not self.configured:
             raise RuntimeError("Gemini is not configured.")
         body = {
@@ -58,7 +65,7 @@ class GeminiReasoner:
             "contents": [{"role": "user", "parts": [{"text": input_text}]}],
             "generationConfig": {
                 "temperature": 0.1,
-                "maxOutputTokens": 900,
+                "maxOutputTokens": max_output_tokens,
                 "responseMimeType": "application/json",
                 "responseJsonSchema": schema,
             },
@@ -180,6 +187,7 @@ class GeminiReasoner:
                 instructions=instructions,
                 input_text=json.dumps(packet),
                 schema=schema,
+                max_output_tokens=2400,
             )
         except (httpx.HTTPError, ValueError, TypeError, RuntimeError) as exc:
             logger.warning("Gemini plan refinement failed; using deterministic summary: %s", type(exc).__name__)
