@@ -25,7 +25,7 @@ def _database_path(database_url: str) -> Path:
     return Path(parsed.database).expanduser().resolve()
 
 
-def _is_valid_database(path: Path) -> bool:
+def _is_valid_database(path: Path, *, full_check: bool = False) -> bool:
     if not path.is_file() or path.stat().st_size < len(SQLITE_HEADER):
         return False
     with path.open("rb") as handle:
@@ -33,7 +33,9 @@ def _is_valid_database(path: Path) -> bool:
             return False
     try:
         with sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True) as connection:
-            return connection.execute("PRAGMA quick_check").fetchone() == ("ok",)
+            if full_check:
+                return connection.execute("PRAGMA quick_check").fetchone() == ("ok",)
+            return connection.execute("PRAGMA schema_version").fetchone() is not None
     except sqlite3.DatabaseError:
         return False
 
@@ -83,7 +85,7 @@ def bootstrap_database() -> Path:
     try:
         _download_snapshot(snapshot_url, archive, expected_sha256)
         _expand_snapshot(archive, expanded)
-        if not _is_valid_database(expanded):
+        if not _is_valid_database(expanded, full_check=True):
             raise ValueError("The expanded snapshot is not a valid SQLite database.")
         os.replace(expanded, destination)
     finally:

@@ -26,6 +26,7 @@ def test_snapshot_expands_to_a_valid_sqlite_database(tmp_path):
     expanded = tmp_path / "expanded.sqlite3"
     _expand_snapshot(archive, expanded)
     assert _is_valid_database(expanded)
+    assert _is_valid_database(expanded, full_check=True)
 
 
 def test_database_path_requires_file_backed_sqlite():
