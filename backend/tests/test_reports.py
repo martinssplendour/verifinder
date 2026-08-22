@@ -1,10 +1,12 @@
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.billing_models import BillingBase, SavedReport
 from app.schemas import DecisionPlanResponse
+import app.services.reports as reports
 from app.services.reports import build_plan_pdf, list_saved_reports
 
 
@@ -52,3 +54,34 @@ def test_list_saved_reports_is_scoped_to_owner_and_ready_state():
     ])
     session.commit()
     assert [report.id for report in list_saved_reports(session, "user-1")] == ["r1"]
+
+
+def test_storage_rejects_modern_secret_key_that_cannot_authorize_storage(monkeypatch):
+    settings = SimpleNamespace(
+        supabase_url="https://example.supabase.co",
+        supabase_secret_key="sb_secret_example",
+        report_storage_bucket="reports",
+    )
+    monkeypatch.setattr(reports, "get_settings", lambda: settings)
+
+    assert reports.report_storage_configured() is False
+    try:
+        reports.storage_request_headers()
+    except reports.ReportStorageError:
+        pass
+    else:
+        raise AssertionError("Modern secret keys must not be treated as Storage bearer JWTs.")
+
+
+def test_storage_headers_keep_bearer_for_legacy_service_role(monkeypatch):
+    settings = SimpleNamespace(
+        supabase_url="https://example.supabase.co",
+        supabase_secret_key="legacy-jwt",
+        report_storage_bucket="reports",
+    )
+    monkeypatch.setattr(reports, "get_settings", lambda: settings)
+
+    assert reports.storage_request_headers() == {
+        "apikey": "legacy-jwt",
+        "Authorization": "Bearer legacy-jwt",
+    }

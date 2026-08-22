@@ -38,7 +38,13 @@ class ReportStorageError(RuntimeError):
 
 def report_storage_configured() -> bool:
     settings = get_settings()
-    return bool(settings.supabase_url and settings.supabase_secret_key and settings.report_storage_bucket)
+    key = str(settings.supabase_secret_key or "")
+    return bool(
+        settings.supabase_url
+        and key
+        and not key.startswith("sb_secret_")
+        and settings.report_storage_bucket
+    )
 
 
 def _safe_text(value: object) -> str:
@@ -216,14 +222,12 @@ def build_plan_pdf(plan: DecisionPlanResponse) -> bytes:
     return output.getvalue()
 
 
-def _storage_headers(content_type: str | None = None) -> dict[str, str]:
+def storage_request_headers(content_type: str | None = None) -> dict[str, str]:
     settings = get_settings()
     if not report_storage_configured():
         raise ReportStorageError("Private report storage is not configured.")
-    headers = {
-        "apikey": str(settings.supabase_secret_key),
-        "Authorization": f"Bearer {settings.supabase_secret_key}",
-    }
+    key = str(settings.supabase_secret_key)
+    headers = {"apikey": key, "Authorization": f"Bearer {key}"}
     if content_type:
         headers["Content-Type"] = content_type
     return headers
@@ -240,7 +244,7 @@ async def upload_pdf(path: str, pdf: bytes) -> None:
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
             _object_url(path),
-            headers={**_storage_headers("application/pdf"), "x-upsert": "false"},
+            headers={**storage_request_headers("application/pdf"), "x-upsert": "false"},
             content=pdf,
         )
     if response.status_code not in {200, 201}:
@@ -253,7 +257,7 @@ async def signed_download_url(path: str) -> tuple[str, datetime]:
     async with httpx.AsyncClient(timeout=15.0) as client:
         response = await client.post(
             _object_url(path, operation="object/sign"),
-            headers=_storage_headers("application/json"),
+            headers=storage_request_headers("application/json"),
             json={"expiresIn": ttl, "download": True},
         )
     if response.status_code != 200:
@@ -273,7 +277,7 @@ async def delete_pdf(path: str) -> None:
     async with httpx.AsyncClient(timeout=15.0) as client:
         response = await client.delete(
             f"{settings.supabase_url.rstrip('/')}/storage/v1/object/{bucket}",
-            headers=_storage_headers("application/json"),
+            headers=storage_request_headers("application/json"),
             json={"prefixes": [PurePosixPath(path).as_posix()]},
         )
     if response.status_code not in {200, 204, 404}:

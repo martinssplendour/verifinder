@@ -13,7 +13,7 @@ from app.database import SessionLocal
 from app.models import DataSource, DatasetVersion, RunStatus
 from app.services.notifications import retry_pending_alerts
 from app.services.refresh import refresh_due_sources
-from app.services.reports import report_storage_configured
+from app.services.reports import report_storage_configured, storage_request_headers
 from app.services.watchlists import scan_live_watchlists
 
 
@@ -122,10 +122,7 @@ def run_operational_checks() -> list[OperationCheck]:
             try:
                 response = httpx.get(
                     f"{settings.supabase_url.rstrip('/')}/storage/v1/bucket/{settings.report_storage_bucket}",
-                    headers={
-                        "apikey": str(settings.supabase_secret_key),
-                        "Authorization": f"Bearer {settings.supabase_secret_key}",
-                    },
+                    headers=storage_request_headers(),
                     timeout=10.0,
                 )
                 storage_status = "ok" if response.status_code == 200 else "failed"

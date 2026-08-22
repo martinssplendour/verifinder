@@ -24,7 +24,8 @@ def test_billing_migrations_create_only_transactional_tables(tmp_path):
         text=True,
     )
 
-    tables = set(inspect(create_engine(f"sqlite:///{database.as_posix()}")).get_table_names())
+    inspector = inspect(create_engine(f"sqlite:///{database.as_posix()}"))
+    tables = set(inspector.get_table_names())
     assert tables == {
         "billing_alembic_version",
         "profiles",
@@ -39,3 +40,5 @@ def test_billing_migrations_create_only_transactional_tables(tmp_path):
         "operation_checks",
         "scheduler_leases",
     }
+    alert_columns = {column["name"] for column in inspector.get_columns("watchlist_alerts")}
+    assert "fingerprint" in alert_columns
