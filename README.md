@@ -40,14 +40,13 @@ The backend defaults to a local SQLite file when `DATABASE_URL` is not supplied.
 
 ## Production deployment
 
-The root [`render.yaml`](render.yaml) defines two Frankfurt services:
+The root [`render.yaml`](render.yaml) defines one Frankfurt Starter service. A small supervisor starts FastAPI on an internal loopback port and Next.js on Render's public port. Next.js owns `verifinder.splendoure.com` and proxies `/api/*` internally, so browser requests remain same-origin without a second Render service.
 
-- `verifinder-web`, a Next.js web service that owns `verifinder.splendoure.com` and proxies `/api/*` to the API so browser requests remain same-origin.
-- `verifinder-api`, a FastAPI starter service with a 6 GB encrypted persistent disk. On an empty disk it downloads the public, checksummed database snapshot, verifies its SHA-256, expands it atomically, runs Alembic migrations and then starts Uvicorn.
+The single service has a 6 GB encrypted persistent disk. On an empty disk it downloads the public, checksummed database snapshot, verifies its SHA-256, expands it atomically, runs Alembic migrations and then starts both application processes.
 
 The database itself is never committed to Git. The release asset is a 649.1 MB gzip snapshot of the 3.47 GB SQLite database and has SHA-256 `4c81a7f6a2155fdece5b735c85ff74c4544048b8652ced7e6ef1b0ee4ecc457e`. Render secrets (`GEMINI_API_KEY`, `COMPANIES_HOUSE_API_KEY`, and optional `EPC_API_KEY`) are configured as secret environment values and remain server-side.
 
-The disk-backed API requires a paid Render service; this is intentional because Render's free services discard SQLite files whenever they restart or spin down. The frontend can remain on a free instance.
+The disk-backed application requires one paid Render service; this is intentional because Render's free services discard SQLite files whenever they restart or spin down.
 
 ## Run locally
 

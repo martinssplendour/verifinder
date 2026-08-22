@@ -4,11 +4,12 @@ services:
     runtime: python
     region: frankfurt
     plan: starter
-    rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: python -m app.database_snapshot && python -m alembic upgrade head && python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install -r backend/requirements.txt && cd frontend && npm ci && npm run build
+    startCommand: python backend/combined_server.py
     healthCheckPath: /api/health
     autoDeployTrigger: commit
+    domains:
+      - verifinder.splendoure.com
     disk:
       name: verifinder-data
       mountPath: /opt/render/project/src/backend/data
@@ -16,14 +17,20 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.10
+      - key: NODE_VERSION
+        value: 22.22.0
       - key: ENVIRONMENT
         value: production
+      - key: INTERNAL_API_PORT
+        value: 8000
+      - key: BACKEND_URL
+        value: http://127.0.0.1:8000
       - key: DATABASE_URL
         value: sqlite:////opt/render/project/src/backend/data/verifinder.sqlite3
       - key: RAW_DATA_STORAGE
         value: /opt/render/project/src/backend/data/raw-data
       - key: CORS_ORIGINS
-        value: https://verifinder.splendoure.com,https://verifinder-web.onrender.com
+        value: https://verifinder.splendoure.com,https://verifinder-api.onrender.com
       - key: GEMINI_MODEL
         value: gemini-2.5-flash
       - key: GEMINI_API_KEY
@@ -36,21 +43,3 @@ services:
         value: https://github.com/martinssplendour/verifinder/releases/download/data-2026-08-22/verifinder.sqlite3.gz
       - key: DATABASE_SNAPSHOT_SHA256
         value: 4c81a7f6a2155fdece5b735c85ff74c4544048b8652ced7e6ef1b0ee4ecc457e
-
-  - type: web
-    name: verifinder-web
-    runtime: node
-    region: frankfurt
-    plan: free
-    rootDir: frontend
-    buildCommand: npm ci && npm run build
-    startCommand: npm start
-    healthCheckPath: /
-    autoDeployTrigger: commit
-    domains:
-      - verifinder.splendoure.com
-    envVars:
-      - key: NODE_VERSION
-        value: 22.22.0
-      - key: BACKEND_URL
-        value: https://verifinder-api.onrender.com
