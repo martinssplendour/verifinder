@@ -41,7 +41,7 @@ MANIFEST_VERSION = 1
 IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]*$")
 SNAPSHOT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
 STAGING_DIRECTORY = re.compile(r"^\.staging-[0-9a-f]{32}$")
-DUCKDB_MEMORY_LIMIT = os.getenv("PUBLIC_DATA_EXPORT_MEMORY_LIMIT", "192MB")
+DUCKDB_MEMORY_LIMIT = os.getenv("PUBLIC_DATA_EXPORT_MEMORY_LIMIT", "320MB")
 DUCKDB_MAX_TEMP_SIZE = os.getenv("PUBLIC_DATA_EXPORT_MAX_TEMP_SIZE", "1GB")
 
 
@@ -132,15 +132,20 @@ def export_sqlite_to_parquet(source: Path, root: Path, snapshot_id: str | None =
             parquet_file = staging / f"{table}.parquet"
             quoted = _identifier(table)
             row_count = connection.execute(f"SELECT count(*) FROM source.{quoted}").fetchone()[0]
+            print(f"Exporting {table} ({row_count} rows)...", flush=True)
             connection.execute(
                 f"COPY (SELECT * FROM source.{quoted}) TO {_literal(parquet_file.as_posix())} "
-                "(FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 25000, PER_THREAD_OUTPUT false)"
+                "(FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 8192, PER_THREAD_OUTPUT false)"
             )
             manifest_tables[table] = {
                 "file": parquet_file.name,
                 "rows": int(row_count),
                 "bytes": parquet_file.stat().st_size,
             }
+            print(
+                f"Exported {table} ({parquet_file.stat().st_size} bytes).",
+                flush=True,
+            )
     except BaseException:
         _remove_staging(root, staging)
         raise
