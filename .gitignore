@@ -20,3 +20,5 @@ dist/
 coverage/
 raw-data/*
 !raw-data/.gitkeep
+public-data/
+supabase/.temp/

@@ -27,6 +27,22 @@ services:
         value: http://127.0.0.1:8000
       - key: DATABASE_URL
         value: sqlite:////opt/render/project/src/backend/data/verifinder.sqlite3
+      - key: PUBLIC_DATA_MODE
+        value: parquet
+      - key: PUBLIC_DATA_ROOT
+        value: /opt/render/project/src/backend/data/public-data
+      - key: PUBLIC_DATABASE_URL
+        value: duckdb:////opt/render/project/src/backend/data/public-data/verifinder.duckdb
+      - key: TRANSACTION_DATABASE_URL
+        sync: false
+      - key: TRANSACTION_MIGRATION_DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PROJECT_REF
+        sync: false
+      - key: SUBJECT_SIGNING_KEY
+        sync: false
       - key: RAW_DATA_STORAGE
         value: /opt/render/project/src/backend/data/raw-data
       - key: CORS_ORIGINS

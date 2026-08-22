@@ -5,7 +5,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.database import get_db, get_read_db
+from app.billing_database import get_billing_db
+from app.database import get_read_db
 from app.models import ChangeEvent, IngestionRun, RunStatus
 from app.schemas import (
     AreaCheckResponse,
@@ -135,7 +136,10 @@ def _change_item(event: ChangeEvent, source: SourceAttribution) -> ChangeItem:
 
 
 @router.get("/health")
-async def health(session: Session = Depends(get_db)) -> dict:
+async def health(
+    session: Session = Depends(get_read_db),
+    billing_session: Session = Depends(get_billing_db),
+) -> dict:
     sponsor_context = latest_sponsor_context(session)
     qualification_context = latest_qualification_context(session)
     welsh_qualification_context = latest_welsh_qualification_context(session)
@@ -147,8 +151,11 @@ async def health(session: Session = Depends(get_db)) -> dict:
     property_context = latest_property_context(session)
     school_context = latest_school_context(session)
     ofsted_context = latest_ofsted_context(session)
+    transaction_database = billing_session.get_bind().dialect.name
     return {
         "status": "ok",
+        "public_data_store": session.get_bind().dialect.name,
+        "transaction_database": transaction_database,
         "companies_house": "configured" if settings.companies_house_api_key else "not_configured",
         "epc": "configured" if settings.epc_api_key else "not_configured",
         "gemini": "configured" if settings.gemini_api_key else "not_configured",
@@ -195,13 +202,13 @@ async def search(q: str = Query(min_length=2, max_length=160), limit: int = Quer
 
 
 @router.get("/companies/{company_number}", response_model=CompanyProfile)
-async def company_profile(company_number: str, session: Session = Depends(get_db)):
+async def company_profile(company_number: str, session: Session = Depends(get_read_db)):
     profile, _ = await _company_profile(company_number, session)
     return profile
 
 
 @router.get("/companies/{company_number}/sponsorship")
-async def company_sponsorship(company_number: str, session: Session = Depends(get_db)):
+async def company_sponsorship(company_number: str, session: Session = Depends(get_read_db)):
     profile, _ = await _company_profile(company_number, session)
     return profile.sponsorship
 
@@ -220,7 +227,7 @@ async def company_officers(company_number: str):
 
 
 @router.get("/companies/{company_number}/sources", response_model=list[SourceAttribution])
-async def company_sources(company_number: str, session: Session = Depends(get_db)):
+async def company_sources(company_number: str, session: Session = Depends(get_read_db)):
     profile, _ = await _company_profile(company_number, session)
     sources = [profile.company_source]
     if profile.sponsorship.source:
@@ -232,7 +239,7 @@ async def company_sources(company_number: str, session: Session = Depends(get_db
 async def sponsor_search(
     q: str = Query(min_length=2, max_length=160),
     limit: int = Query(default=8, ge=1, le=20),
-    session: Session = Depends(get_db),
+    session: Session = Depends(get_read_db),
 ):
     results, context = search_sponsor_records(session, q, limit)
     return SponsorSearchResponse(
@@ -245,7 +252,7 @@ async def sponsor_search(
 
 
 @router.get("/sponsors/{record_id}", response_model=SponsorRecordView)
-async def sponsor_detail(record_id: str, session: Session = Depends(get_db)):
+async def sponsor_detail(record_id: str, session: Session = Depends(get_read_db)):
     record = get_sponsor_record(session, record_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Sponsor record not found in the latest dataset version.")
@@ -256,7 +263,7 @@ async def sponsor_detail(record_id: str, session: Session = Depends(get_db)):
 async def qualification_search(
     q: str = Query(min_length=2, max_length=200),
     limit: int = Query(default=10, ge=1, le=25),
-    session: Session = Depends(get_db),
+    session: Session = Depends(get_read_db),
 ):
     results, context = search_qualifications(session, q, limit)
     contexts = [
@@ -274,7 +281,7 @@ async def qualification_search(
 
 
 @router.get("/qualifications/{record_id}", response_model=QualificationRecordView)
-async def qualification_detail(record_id: str, session: Session = Depends(get_db)):
+async def qualification_detail(record_id: str, session: Session = Depends(get_read_db)):
     record = get_qualification(session, record_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Qualification not found in the latest register snapshot.")
@@ -285,7 +292,7 @@ async def qualification_detail(record_id: str, session: Session = Depends(get_db
 async def study_provider_search(
     q: str = Query(min_length=2, max_length=200),
     limit: int = Query(default=10, ge=1, le=25),
-    session: Session = Depends(get_db),
+    session: Session = Depends(get_read_db),
 ):
     results, student_context, ofs_context = search_study_providers(session, q, limit)
     return StudyProviderSearchResponse(
@@ -297,7 +304,7 @@ async def study_provider_search(
 
 
 @router.get("/study/{record_type}/{record_id}", response_model=StudyProviderDetail)
-async def study_provider_detail(record_type: str, record_id: int, session: Session = Depends(get_db)):
+async def study_provider_detail(record_type: str, record_id: int, session: Session = Depends(get_read_db)):
     record = get_study_provider(session, record_type, record_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Study-provider record not found in the latest snapshots.")
@@ -308,7 +315,7 @@ async def study_provider_detail(record_type: str, record_id: int, session: Sessi
 async def food_search(
     q: str = Query(min_length=2, max_length=200),
     limit: int = Query(default=10, ge=1, le=25),
-    session: Session = Depends(get_db),
+    session: Session = Depends(get_read_db),
 ):
     results, context = search_food_establishments(session, q, limit)
     return FoodSearchResponse(
@@ -321,7 +328,7 @@ async def food_search(
 
 
 @router.get("/food/{record_id}", response_model=FoodEstablishmentView)
-async def food_detail(record_id: str, session: Session = Depends(get_db)):
+async def food_detail(record_id: str, session: Session = Depends(get_read_db)):
     record = get_food_establishment(session, record_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Food establishment not found in the latest ratings snapshot.")
@@ -331,7 +338,7 @@ async def food_detail(record_id: str, session: Session = Depends(get_db)):
 @router.get("/areas/check", response_model=AreaCheckResponse)
 async def area_check(
     postcode: str = Query(min_length=5, max_length=10),
-    session: Session = Depends(get_db),
+    session: Session = Depends(get_read_db),
 ):
     result = await get_area_check(session, postcode)
     if result is None:
@@ -345,7 +352,7 @@ async def area_check(
 async def property_search(
     q: str = Query(min_length=2, max_length=240),
     limit: int = Query(default=20, ge=1, le=40),
-    session: Session = Depends(get_db),
+    session: Session = Depends(get_read_db),
 ):
     results, context = search_properties(session, q, limit)
     return PropertySearchResponse(
@@ -358,7 +365,7 @@ async def property_search(
 
 
 @router.get("/properties/{property_key}", response_model=PropertyDetail)
-async def property_detail(property_key: str, session: Session = Depends(get_db)):
+async def property_detail(property_key: str, session: Session = Depends(get_read_db)):
     result = await get_property(session, property_key, epc_client=epc_client())
     if result is None:
         raise HTTPException(status_code=404, detail="Property not found in the latest imported sales snapshot.")
@@ -369,7 +376,7 @@ async def property_detail(property_key: str, session: Session = Depends(get_db))
 async def school_search(
     q: str = Query(min_length=2, max_length=200),
     limit: int = Query(default=10, ge=1, le=25),
-    session: Session = Depends(get_db),
+    session: Session = Depends(get_read_db),
 ):
     results, context = search_schools(session, q, limit)
     return SchoolSearchResponse(
@@ -382,7 +389,7 @@ async def school_search(
 
 
 @router.get("/schools/{urn}", response_model=SchoolDetail)
-async def school_detail(urn: str, session: Session = Depends(get_db)):
+async def school_detail(urn: str, session: Session = Depends(get_read_db)):
     record = get_school(session, urn)
     if record is None:
         raise HTTPException(status_code=404, detail="School not found in the latest imported GIAS snapshot.")
@@ -390,7 +397,7 @@ async def school_detail(urn: str, session: Session = Depends(get_db)):
 
 
 @router.get("/companies/{company_number}/changes", response_model=list[ChangeItem])
-async def company_changes(company_number: str, session: Session = Depends(get_db)):
+async def company_changes(company_number: str, session: Session = Depends(get_read_db)):
     _, resolution = await _company_profile(company_number, session)
     if not resolution.record or not resolution.context:
         return []
@@ -407,7 +414,7 @@ async def company_changes(company_number: str, session: Session = Depends(get_db
 
 
 @router.get("/changes", response_model=list[ChangeItem])
-async def changes(session: Session = Depends(get_db)):
+async def changes(session: Session = Depends(get_read_db)):
     context = latest_sponsor_context(session)
     if not context:
         return []
@@ -417,7 +424,7 @@ async def changes(session: Session = Depends(get_db)):
 
 
 @router.get("/sources", response_model=list[SourceRegistryItem])
-async def sources(session: Session = Depends(get_db)):
+async def sources(session: Session = Depends(get_read_db)):
     sponsor_context = latest_sponsor_context(session)
     sponsor_source = sponsor_context.source if sponsor_context else None
     qualification_context = latest_qualification_context(session)
@@ -626,7 +633,7 @@ async def sources(session: Session = Depends(get_db)):
 
 
 @router.get("/admin/summary")
-async def admin_summary(session: Session = Depends(get_db)):
+async def admin_summary(session: Session = Depends(get_read_db)):
     sponsor_context = latest_sponsor_context(session)
     qualification_context = latest_qualification_context(session)
     welsh_qualification_context = latest_welsh_qualification_context(session)

@@ -36,13 +36,29 @@ def _npm_executable() -> str:
 
 
 def _run_setup() -> None:
+    public_data_mode = os.getenv("PUBLIC_DATA_MODE", "sqlite").strip().lower()
+    if public_data_mode == "parquet":
+        subprocess.run(
+            [sys.executable, "-m", "app.public_data_lake", "bootstrap"],
+            cwd=BACKEND_DIR,
+            check=True,
+        )
+    elif public_data_mode == "sqlite":
+        subprocess.run(
+            [sys.executable, "-m", "app.database_snapshot"],
+            cwd=BACKEND_DIR,
+            check=True,
+        )
+        subprocess.run(
+            [sys.executable, "-m", "alembic", "upgrade", "head"],
+            cwd=BACKEND_DIR,
+            check=True,
+        )
+    else:
+        raise ValueError("PUBLIC_DATA_MODE must be either 'sqlite' or 'parquet'.")
+
     subprocess.run(
-        [sys.executable, "-m", "app.database_snapshot"],
-        cwd=BACKEND_DIR,
-        check=True,
-    )
-    subprocess.run(
-        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        [sys.executable, "-m", "alembic", "-c", "billing_alembic.ini", "upgrade", "head"],
         cwd=BACKEND_DIR,
         check=True,
     )

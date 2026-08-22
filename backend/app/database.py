@@ -13,11 +13,16 @@ class Base(DeclarativeBase):
 
 
 settings = get_settings()
-connect_args = {"timeout": 30} if settings.database_url.startswith("sqlite") else {}
-engine = create_engine(settings.database_url, pool_pre_ping=True, connect_args=connect_args)
+public_database_url = settings.effective_public_database_url
+connect_args: dict[str, object] = {}
+if public_database_url.startswith("sqlite"):
+    connect_args["timeout"] = 30
+elif public_database_url.startswith("duckdb"):
+    connect_args["read_only"] = True
+engine = create_engine(public_database_url, pool_pre_ping=True, connect_args=connect_args)
 
 
-if settings.database_url.startswith("sqlite"):
+if public_database_url.startswith("sqlite"):
     @event.listens_for(engine, "connect")
     def _configure_sqlite(dbapi_connection, _connection_record) -> None:
         cursor = dbapi_connection.cursor()
@@ -49,9 +54,9 @@ def get_read_db() -> Generator[Session, None, None]:
     """Yield a database session that the database itself prevents from writing."""
     connection: Connection = engine.connect()
     transaction = None
-    if settings.database_url.startswith("sqlite"):
+    if public_database_url.startswith("sqlite"):
         connection.exec_driver_sql("PRAGMA query_only = ON")
-    else:
+    elif public_database_url.startswith(("postgres://", "postgresql")):
         transaction = connection.begin()
         connection.exec_driver_sql("SET TRANSACTION READ ONLY")
     session = Session(bind=connection, autoflush=False, expire_on_commit=False)
@@ -63,6 +68,6 @@ def get_read_db() -> Generator[Session, None, None]:
         session.close()
         if transaction is not None and transaction.is_active:
             transaction.rollback()
-        if settings.database_url.startswith("sqlite"):
+        if public_database_url.startswith("sqlite"):
             connection.exec_driver_sql("PRAGMA query_only = OFF")
         connection.close()

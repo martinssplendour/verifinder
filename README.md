@@ -32,21 +32,21 @@ raw-data/      Ignored local storage for preserved official input files
 
 - Node.js 20+
 - Python 3.12+
-- PostgreSQL 16+ for deployment (Docker Compose configuration included)
+- SQLite for local ingestion, DuckDB for Parquet reads, and PostgreSQL 16+ for transactional deployment data
 - A [Companies House developer API key](https://developer.company-information.service.gov.uk/) for live legal-company records
 - A [GOV.UK One Login EPC API bearer token](https://get-energy-performance-data.communities.gov.uk/) for live Energy Performance Certificate data in Property Check
 
-The backend defaults to a local SQLite file when `DATABASE_URL` is not supplied. Copy `.env.example` to `.env` and set `COMPANIES_HOUSE_API_KEY` and `EPC_API_KEY` to enable those live sources; both keys remain server-side.
+The backend defaults to a local SQLite public-data file. `PUBLIC_DATA_MODE=parquet` activates the production read path through DuckDB, while `TRANSACTION_DATABASE_URL` points entitlement and account writes at PostgreSQL. Copy `.env.example` to `.env` and set `COMPANIES_HOUSE_API_KEY` and `EPC_API_KEY` to enable those live sources; all private keys remain server-side.
 
 ## Production deployment
 
 The root [`render.yaml`](render.yaml) defines one Frankfurt Starter service. A small supervisor starts FastAPI on an internal loopback port and Next.js on Render's public port. Next.js owns `verifinder.splendoure.com` and proxies `/api/*` internally, so browser requests remain same-origin without a second Render service.
 
-The single service has a 6 GB encrypted persistent disk. On an empty disk it downloads the public, checksummed database snapshot, verifies its SHA-256, expands it atomically, runs Alembic migrations and then starts both application processes.
+The single service has a 6 GB encrypted persistent disk. On an empty disk it downloads the public, checksummed SQLite snapshot and verifies its SHA-256. The startup migration then exports every public table to a versioned, compressed Parquet snapshot, validates every table count, and atomically activates a DuckDB catalogue over those files. User, entitlement and billing writes use a separate Supabase PostgreSQL connection and never enter the public-data lake.
 
-The database itself is never committed to Git. The release asset is a 649.1 MB gzip snapshot of the 3.47 GB SQLite database and has SHA-256 `4c81a7f6a2155fdece5b735c85ff74c4544048b8652ced7e6ef1b0ee4ecc457e`. Render secrets (`GEMINI_API_KEY`, `COMPANIES_HOUSE_API_KEY`, and optional `EPC_API_KEY`) are configured as secret environment values and remain server-side.
+The databases and Parquet snapshots are never committed to Git. The recovery asset is a 649.1 MB gzip snapshot of the 3.47 GB SQLite source and has SHA-256 `4c81a7f6a2155fdece5b735c85ff74c4544048b8652ced7e6ef1b0ee4ecc457e`. Render secrets (`TRANSACTION_DATABASE_URL`, `SUBJECT_SIGNING_KEY`, `GEMINI_API_KEY`, `COMPANIES_HOUSE_API_KEY`, and optional `EPC_API_KEY`) remain server-side.
 
-The disk-backed application requires one paid Render service; this is intentional because Render's free services discard SQLite files whenever they restart or spin down.
+The disk-backed public-data lake keeps the requested one-service deployment and avoids an additional AWS/MinIO service. It intentionally remains single-instance; moving the same Parquet snapshots to S3-compatible storage later would remove that scaling constraint without changing the controlled query API.
 
 ## Run locally
 
@@ -58,6 +58,7 @@ python -m venv .venv
 .venv\Scripts\Activate.ps1
 python -m pip install -r requirements-dev.txt
 python -m alembic upgrade head
+python -m alembic -c billing_alembic.ini upgrade head
 python -m uvicorn app.main:app --reload
 ```
 
