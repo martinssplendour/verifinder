@@ -1,0 +1,109 @@
+from datetime import datetime, timezone
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+
+from app.database import Base
+from app.models import DataSource, DatasetVersion, RunStatus, SourceHealth, SponsorRecord
+from app.services.sponsor_lookup import get_sponsor_record, resolve_company_sponsorship, search_sponsor_records
+
+
+def sponsor_session() -> Session:
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    session = Session(engine)
+    retrieved = datetime(2026, 8, 21, tzinfo=timezone.utc)
+    source = DataSource(
+        id="home-office-worker-sponsors",
+        organisation="UK Visas and Immigration",
+        name="Register of licensed sponsors: workers",
+        source_type="CSV",
+        official_url="https://www.gov.uk/government/publications/register-of-licensed-sponsors-workers",
+        data_url=None,
+        country="GB",
+        refresh_frequency="Checked daily",
+        health=SourceHealth.HEALTHY,
+        last_successful_retrieval=retrieved,
+    )
+    version = DatasetVersion(
+        id="version-1",
+        source_id=source.id,
+        version_identifier="2026-08-20-example",
+        retrieved_at=retrieved,
+        published_at=retrieved,
+        file_hash="a" * 64,
+        record_count=1,
+        storage_location="raw.csv",
+        processing_status=RunStatus.SUCCEEDED,
+    )
+    sponsor = SponsorRecord(
+        dataset_version_id=version.id,
+        source_record_key="b" * 64,
+        organisation_name="Northstar Labs Ltd",
+        normalised_name="northstar labs limited",
+        town_city="London",
+        county=None,
+        sponsor_rating="Worker (A rating)",
+        routes=["Skilled Worker", "Scale-up"],
+        active=True,
+        raw_record=[],
+    )
+    similar_sponsor = SponsorRecord(
+        dataset_version_id=version.id,
+        source_record_key="c" * 64,
+        organisation_name="Northstar Arts CIO",
+        normalised_name="northstar arts cio",
+        town_city="Luton",
+        county=None,
+        sponsor_rating="Worker (A rating)",
+        routes=["Skilled Worker"],
+        active=True,
+        raw_record=[],
+    )
+    session.add_all([source, version, sponsor, similar_sponsor])
+    session.commit()
+    return session
+
+
+def test_exact_name_and_town_returns_confirmed_sponsor_with_provenance():
+    session = sponsor_session()
+    resolution = resolve_company_sponsorship(
+        session,
+        company_name="NORTHSTAR LABS LIMITED",
+        registered_office="7 Westferry Circus, London, E14 4HD",
+    )
+    assert resolution.summary.status == "match_found"
+    assert resolution.summary.routes == ["Scale-up", "Skilled Worker"]
+    assert resolution.summary.rating == "A"
+    assert resolution.summary.source is not None
+    assert resolution.summary.source.version == "2026-08-20-example"
+
+
+def test_no_match_is_limited_to_latest_dataset_and_keeps_source():
+    session = sponsor_session()
+    resolution = resolve_company_sponsorship(
+        session,
+        company_name="Unrelated Example Limited",
+        registered_office="Bristol",
+    )
+    assert resolution.summary.status == "no_match"
+    assert "does not prove" in resolution.summary.explanation
+    assert resolution.summary.source is not None
+
+
+def test_sponsor_register_can_be_searched_by_partial_company_name():
+    session = sponsor_session()
+    results, context = search_sponsor_records(session, "northstar", limit=5)
+    assert context is not None
+    assert len(results) == 2
+    assert {result.organisation_name for result in results} == {"Northstar Arts CIO", "Northstar Labs Ltd"}
+    lab_result = next(result for result in results if result.organisation_name == "Northstar Labs Ltd")
+    assert lab_result.routes == ["Scale-up", "Skilled Worker"]
+
+
+def test_sponsor_record_detail_is_limited_to_latest_version():
+    session = sponsor_session()
+    results, _ = search_sponsor_records(session, "Northstar Labs", limit=5)
+    detail = get_sponsor_record(session, results[0].id)
+    assert detail is not None
+    assert detail.source.health == "healthy"
