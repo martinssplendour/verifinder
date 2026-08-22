@@ -33,7 +33,9 @@ def billing_configured() -> bool:
         settings.stripe_secret_key
         and settings.stripe_webhook_secret
         and settings.stripe_plus_price_id
+        and settings.stripe_plus_annual_price_id
         and settings.stripe_professional_price_id
+        and settings.stripe_professional_annual_price_id
     )
 
 

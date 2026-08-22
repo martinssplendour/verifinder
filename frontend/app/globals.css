@@ -681,6 +681,12 @@ button { color: inherit; }
 .account-sign-in .button { margin-top: 4px; }
 .account-sign-in > small { display: block; margin-top: 16px; color: var(--ink-soft); font-size: 9px; }
 .account-plans { padding: 24px; }
+.billing-cadence { width: fit-content; margin: 0 auto 16px; padding: 3px; border: 1px solid var(--line); border-radius: 7px; display: flex; gap: 3px; background: #f5f6f9; }
+.billing-cadence button { min-height: 34px; padding: 0 13px; border: 0; border-radius: 5px; display: inline-flex; align-items: center; gap: 6px; color: var(--ink-soft); background: transparent; font-size: 10px; font-weight: 750; cursor: pointer; }
+.billing-cadence button small { padding: 2px 5px; border-radius: 4px; color: var(--green); background: var(--green-soft); font-size: 8px; }
+.billing-cadence button:hover { color: var(--ink); }
+.billing-cadence button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.billing-cadence button.is-selected { color: var(--brand); background: #fff; box-shadow: var(--shadow-sm); }
 .plan-choice-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 11px; }
 .plan-choice-grid article { min-height: 315px; padding: 20px; border: 1px solid var(--line); border-radius: 9px; display: flex; flex-direction: column; background: #fff; }
 .plan-choice-grid article.is-featured { border-color: #bfc9ff; box-shadow: 0 12px 32px rgba(36,56,166,.1); }

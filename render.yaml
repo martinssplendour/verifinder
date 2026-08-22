@@ -83,8 +83,14 @@ services:
         sync: false
       - key: EMAIL_API_KEY
         sync: false
+      - key: EMAIL_PROVIDER
+        value: zoho_mcp
+      - key: ZOHO_MCP_URL
+        sync: false
+      - key: ZOHO_MAIL_ACCOUNT_ID
+        value: "8056852000000002002"
       - key: NOTIFICATION_FROM_EMAIL
-        value: "VeriFinder Alerts <alerts@verifinder.splendoure.com>"
+        value: "VeriFinder Alerts <alerts@splendoure.com>"
       - key: REPORT_STORAGE_BUCKET
         value: verifinder-reports
       - key: REPORT_SIGNED_URL_TTL_SECONDS

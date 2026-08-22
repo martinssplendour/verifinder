@@ -24,8 +24,11 @@ class Settings(BaseSettings):
     report_storage_bucket: str = "verifinder-reports"
     report_signed_url_ttl_seconds: int = 300
     subject_signing_key: str | None = None
+    email_provider: str = "auto"
     email_api_key: str | None = None
-    notification_from_email: str = "VeriFinder Alerts <alerts@verifinder.splendoure.com>"
+    zoho_mcp_url: str | None = None
+    zoho_mail_account_id: str | None = None
+    notification_from_email: str = "VeriFinder Alerts <alerts@splendoure.com>"
     scheduler_enabled: bool = True
     scheduler_interval_minutes: int = 360
     scheduler_cycle_timeout_minutes: int = 30
