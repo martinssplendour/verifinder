@@ -155,7 +155,12 @@ def is_due(last_successful_retrieval: datetime | None, cadence: timedelta, *, no
     return (current - last_successful_retrieval) >= cadence
 
 
-def refresh_due_sources(*, only: str | None = None, force: bool = False) -> list[dict]:
+def refresh_due_sources(
+    *,
+    only: str | None = None,
+    force: bool = False,
+    on_progress: Callable[[dict], None] | None = None,
+) -> list[dict]:
     results: list[dict] = []
     for source_id, spec in REFRESH_SPECS.items():
         if only and source_id != only:
@@ -167,14 +172,22 @@ def refresh_due_sources(*, only: str | None = None, force: bool = False) -> list
         finally:
             session.close()
         if not force and not is_due(last_retrieved, spec.cadence):
-            results.append({"source": source_id, "status": "skipped_not_due", "last_successful_retrieval": last_retrieved})
+            result = {"source": source_id, "status": "skipped_not_due", "last_successful_retrieval": last_retrieved}
+            results.append(result)
+            if on_progress:
+                on_progress(result)
             continue
+        if on_progress:
+            on_progress({"source": source_id, "status": "refreshing"})
         try:
             with tempfile.TemporaryDirectory(prefix="verifinder-refresh-") as tmp:
                 manifest = spec.refresh(Path(tmp))
-            results.append({"source": source_id, "status": "refreshed", **manifest})
+            result = {"source": source_id, "status": "refreshed", **manifest}
         except Exception as error:
-            results.append({"source": source_id, "status": "failed", "error": str(error)[:500]})
+            result = {"source": source_id, "status": "failed", "error": str(error)[:500]}
+        results.append(result)
+        if on_progress:
+            on_progress(result)
 
     refreshed_any = any(item["status"] == "refreshed" for item in results)
     if refreshed_any:
@@ -182,10 +195,13 @@ def refresh_due_sources(*, only: str | None = None, force: bool = False) -> list
         billing_session = BillingSessionLocal()
         try:
             alerts = scan_for_changes(public_session, billing_session)
-            results.append({"source": "watchlist-scan", "status": "scanned", "alerts_created": len(alerts)})
+            result = {"source": "watchlist-scan", "status": "scanned", "alerts_created": len(alerts)}
         except Exception as error:
-            results.append({"source": "watchlist-scan", "status": "failed", "error": str(error)[:500]})
+            result = {"source": "watchlist-scan", "status": "failed", "error": str(error)[:500]}
         finally:
             public_session.close()
             billing_session.close()
+        results.append(result)
+        if on_progress:
+            on_progress(result)
     return results

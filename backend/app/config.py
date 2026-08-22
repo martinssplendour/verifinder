@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     notification_from_email: str = "VeriFinder Alerts <alerts@verifinder.splendoure.com>"
     scheduler_enabled: bool = True
     scheduler_interval_minutes: int = 360
+    scheduler_cycle_timeout_minutes: int = 30
     supabase_backups_verified_at: str | None = None
     database_snapshot_url: str | None = None
     app_url: str = "http://localhost:3000"

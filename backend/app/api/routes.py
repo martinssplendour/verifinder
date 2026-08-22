@@ -489,14 +489,25 @@ async def operations_status(billing_session: Session = Depends(get_billing_db)) 
                 checked_at=check.checked_at,
             )
     lease = billing_session.get(SchedulerLease, JOB_NAME)
+    locked_until = lease.locked_until if lease else None
+    if locked_until and locked_until.tzinfo is None:
+        locked_until = locked_until.replace(tzinfo=timezone.utc)
+    scheduler_stale = bool(
+        lease
+        and lease.last_status == "running"
+        and locked_until
+        and locked_until < datetime.now(timezone.utc)
+    )
     return {
-        "status": "ok" if latest and all(item.status != "failed" for item in latest.values()) else "attention",
+        "status": "ok" if latest and not scheduler_stale and all(item.status != "failed" for item in latest.values()) else "attention",
         "scheduler": {
             "enabled": settings.scheduler_enabled,
             "interval_minutes": settings.scheduler_interval_minutes,
             "last_started_at": lease.last_started_at if lease else None,
             "last_finished_at": lease.last_finished_at if lease else None,
-            "last_status": lease.last_status if lease else "not_run",
+            "last_status": "stale" if scheduler_stale else (lease.last_status if lease else "not_run"),
+            "phase": (lease.last_detail or {}).get("phase") if lease else None,
+            "detail": lease.last_detail if lease else None,
         },
         "checks": list(latest.values()),
     }
