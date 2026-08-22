@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
@@ -7,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.billing_models import BillingBase, SavedReport
 from app.schemas import DecisionPlanResponse
 import app.services.reports as reports
-from app.services.reports import build_plan_pdf, list_saved_reports
+from app.services.reports import build_plan_pdf, delete_pdf, list_saved_reports
 
 
 def _plan() -> DecisionPlanResponse:
@@ -85,3 +86,34 @@ def test_storage_headers_keep_bearer_for_legacy_service_role(monkeypatch):
         "apikey": "legacy-jwt",
         "Authorization": "Bearer legacy-jwt",
     }
+
+
+def test_delete_pdf_uses_delete_request_with_json_body(monkeypatch):
+    captured = {}
+    settings = SimpleNamespace(
+        supabase_url="https://example.supabase.co",
+        supabase_secret_key="legacy-jwt",
+        report_storage_bucket="reports",
+    )
+    monkeypatch.setattr(reports, "get_settings", lambda: settings)
+
+    class Response:
+        status_code = 200
+
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def request(self, method, url, **kwargs):
+            captured.update(method=method, url=url, **kwargs)
+            return Response()
+
+    monkeypatch.setattr(reports.httpx, "AsyncClient", lambda **_kwargs: Client())
+
+    asyncio.run(delete_pdf("user/report.pdf"))
+
+    assert captured["method"] == "DELETE"
+    assert captured["json"] == {"prefixes": ["user/report.pdf"]}

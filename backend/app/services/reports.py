@@ -275,7 +275,8 @@ async def delete_pdf(path: str) -> None:
     settings = get_settings()
     bucket = quote(settings.report_storage_bucket, safe="")
     async with httpx.AsyncClient(timeout=15.0) as client:
-        response = await client.delete(
+        response = await client.request(
+            "DELETE",
             f"{settings.supabase_url.rstrip('/')}/storage/v1/object/{bucket}",
             headers=storage_request_headers("application/json"),
             json={"prefixes": [PurePosixPath(path).as_posix()]},
