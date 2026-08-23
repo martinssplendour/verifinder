@@ -2,7 +2,7 @@
 
 ## Product boundary
 
-VeriFinder is a modular monolith with seven live public-data engines: Company Check, Qualification Check, Food Check, Area Check, Property Check, Study Provider Check and School Check.
+VeriFinder is a modular monolith with eight live public-data checks: Company Check, Sponsorship Check, Qualification Check, Food Check, Area Check, Property Check, Study Provider Check and School Check.
 
 ## Information flow
 
@@ -16,14 +16,14 @@ Official source
   -> user interface
 ```
 
-Company-to-sponsor linking adds an explicit entity-resolution step between the source record and response. Study Provider Check performs only an exact normalised-name cross-reference between UKVI and OfS records; it does not merge their statuses. School Check performs an exact URN cross-reference between the GIAS establishment register and the Ofsted inspection extract, the same non-merging principle applied to a shared identifier rather than a name. Qualification, food, postcode and property records are queried directly within their latest successful dataset version. Area and property views enrich local immutable snapshots with clearly labelled on-demand official APIs.
+Company Check and Sponsorship Check have separate inputs, queries and responses. Company Check returns Companies House API data; Sponsorship Check returns stored Home Office list rows. There is no company-to-sponsor entity resolution, fuzzy name comparison or combined status. Study Provider Check performs only an exact normalised-name cross-reference between UKVI and OfS records; it does not merge their statuses. School Check performs an exact URN cross-reference between the GIAS establishment register and the Ofsted inspection extract, the same non-merging principle applied to a shared identifier rather than a name. Qualification, food, postcode and property records are queried directly within their latest successful dataset version. Area and property views enrich local immutable snapshots with clearly labelled on-demand official APIs.
 
 ## Frontend
 
 The Next.js application contains:
 
-- a homepage that routes to all seven live checks;
-- source-grouped Company Check results and provenance-first company/sponsor details;
+- a homepage that routes to all eight live checks;
+- independent Company Check and Sponsorship Check forms, results and provenance-first detail pages, with source-labelled type-ahead records kept separate from exact check outcomes;
 - regulator-grouped qualification search across Ofqual/CCEA and Qualifications Wales, with awarding-organisation detail and linked Ofqual units;
 - study-provider search across separately labelled UKVI student-sponsor and OfS provider registers;
 - food-establishment search by name or postcode, with scheme-aware rating detail;
@@ -72,7 +72,6 @@ Core persistence concepts are:
 - `property_sale_records`
 - `school_records`
 - `ofsted_inspection_records`
-- `entity_mappings`
 - `change_events`
 
 PostgreSQL is the intended deployment database. SQLite remains the zero-configuration local-development and test default.

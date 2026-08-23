@@ -31,7 +31,7 @@ from app.schemas.common import (
     SourceRegistryItem,
     VerificationStatus,
 )
-from app.schemas.companies import CompanyProfile, Officer, SponsorshipSummary
+from app.schemas.companies import CompanyProfile, Officer
 from app.schemas.food import (
     FoodEstablishmentSearchResult,
     FoodEstablishmentView,
@@ -160,7 +160,6 @@ __all__ = [
     "SourceRegistryItem",
     "SponsorRecordView",
     "SponsorSearchResponse",
-    "SponsorshipSummary",
     "StudyProviderDetail",
     "StudyProviderSearchResponse",
     "StudyProviderSearchResult",

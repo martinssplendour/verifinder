@@ -6,25 +6,21 @@ import {
   ArrowUpRight,
   BadgeCheck,
   Building2,
-  Check,
   ChevronLeft,
   CircleAlert,
-  Clock3,
-  Database,
   FileText,
   Landmark,
   LoaderCircle,
   MapPin,
-  Route,
+  Search,
   Share2,
-  ShieldCheck,
 } from "lucide-react";
 import { StatusPill } from "@/components/StatusPill";
 import { WatchButton } from "@/components/WatchButton";
 import { getCompany } from "@/services/api";
 import type { CompanyProfile, SourceAttribution } from "@/types";
 
-type Tab = "overview" | "sponsorship" | "details" | "sources";
+type Tab = "overview" | "details" | "sources";
 
 function readableDate(value: string | null) {
   if (!value) return "Not available";
@@ -34,7 +30,7 @@ function readableDate(value: string | null) {
 function SourceCard({ source }: { source: SourceAttribution }) {
   return (
     <article className="source-card">
-      <span className="source-card-icon">{source.id === "companies-house" ? <Landmark size={20} /> : <ShieldCheck size={20} />}</span>
+      <span className="source-card-icon"><Landmark size={20} /></span>
       <div>
         <span className="source-org">{source.organisation}</span>
         <h3>{source.dataset}</h3>
@@ -74,19 +70,18 @@ export default function CompanyPage({ params }: { params: Promise<{ companyNumbe
   }
 
   if (error) {
-    return <div className="shell profile-error"><CircleAlert size={32} /><h1>Company unavailable</h1><p>{error}</p><Link className="button" href="/search">Back to search</Link></div>;
+    return <div className="shell profile-error"><CircleAlert size={32} /><h1>Company unavailable</h1><p>{error}</p><Link className="button" href="/search#company-check">Back to company check</Link></div>;
   }
   if (!profile) {
-    return <div className="loading-state page-loading"><LoaderCircle size={22} /> Loading verified company record…</div>;
+    return <div className="loading-state page-loading"><LoaderCircle size={22} /> Loading Companies House record…</div>;
   }
 
   const companyActive = profile.company_status === "active";
-  const sponsorship = profile.sponsorship;
   return (
     <div className="profile-page">
       <div className="shell">
         <div className="profile-topline">
-          <Link className="back-link" href="/search"><ChevronLeft size={16} /> Back to search</Link>
+          <Link className="back-link" href={`/search?company=${encodeURIComponent(profile.company_name)}#company-check`}><ChevronLeft size={16} /> Back to company check</Link>
           <div className="profile-actions">
             <WatchButton entityType="company" entityId={profile.company_number} label={profile.company_name} />
             <button className="icon-button" type="button" onClick={share}><Share2 size={17} /> {copied ? "Copied" : "Share"}</button>
@@ -95,37 +90,43 @@ export default function CompanyPage({ params }: { params: Promise<{ companyNumbe
         <header className="company-header">
           <span className="company-monogram" aria-hidden="true">{profile.company_name.slice(0, 1)}</span>
           <div>
+            <span className="kicker">Companies House company record</span>
             <h1>{profile.company_name}</h1>
-            <StatusPill status={profile.verified_status}><span>Verified company record</span></StatusPill>
+            <StatusPill status={profile.verified_status}><span>Retrieved from Companies House</span></StatusPill>
             <p>Company number: <strong>{profile.company_number}</strong> <span>·</span> Incorporated: <strong>{readableDate(profile.incorporation_date)}</strong></p>
           </div>
         </header>
 
-        <section className="summary-grid" aria-label="Company summary">
+        <div className="language-note company-source-boundary">
+          <CircleAlert size={18} />
+          <p>This page contains Companies House data only. It does not state whether this company offers visa sponsorship and it is not linked to a sponsor-register organisation.</p>
+        </div>
+
+        <section className="summary-grid" aria-label="Companies House summary">
           <article className="summary-card">
             <span className="summary-label"><Building2 size={16} /> Company status</span>
             <strong className={companyActive ? "positive-text" : ""}>{profile.company_status || "Unavailable"}</strong>
             <small><BadgeCheck size={13} /> {profile.company_source.organisation}</small>
           </article>
           <article className="summary-card">
-            <span className="summary-label"><ShieldCheck size={16} /> Visa sponsorship</span>
-            <strong className={sponsorship.status === "match_found" ? "positive-text" : ""}>{sponsorship.label}</strong>
-            <small>{sponsorship.source ? <><BadgeCheck size={13} /> {sponsorship.source.organisation}</> : <><Database size={13} /> Awaiting source data</>}</small>
-          </article>
-          <article className="summary-card">
-            <span className="summary-label"><Route size={16} /> Sponsorship routes</span>
-            <strong>{sponsorship.routes[0] || "Data unavailable"}</strong>
-            <small>{sponsorship.routes.length > 1 ? `+ ${sponsorship.routes.length - 1} more route` : "From the latest matched record"}</small>
-          </article>
-          <article className="summary-card">
             <span className="summary-label"><MapPin size={16} /> Registered office</span>
             <strong className="address-value">{profile.registered_office || "Not available"}</strong>
             <small>{profile.postcode || "Postcode unavailable"}</small>
           </article>
+          <article className="summary-card">
+            <span className="summary-label"><FileText size={16} /> Company type</span>
+            <strong>{profile.company_type || "Not available"}</strong>
+            <small>Companies House profile value</small>
+          </article>
+          <article className="summary-card">
+            <span className="summary-label"><FileText size={16} /> Next accounts due</span>
+            <strong>{readableDate(profile.accounts_next_due)}</strong>
+            <small>Companies House filing data</small>
+          </article>
         </section>
 
         <nav className="profile-tabs" aria-label="Company profile sections">
-          {(["overview", "sponsorship", "details", "sources"] as Tab[]).map((tab) => (
+          {(["overview", "details", "sources"] as Tab[]).map((tab) => (
             <button key={tab} className={activeTab === tab ? "is-active" : ""} onClick={() => setActiveTab(tab)} type="button">
               {tab === "details" ? "Company details" : tab[0].toUpperCase() + tab.slice(1)}
             </button>
@@ -133,7 +134,7 @@ export default function CompanyPage({ params }: { params: Promise<{ companyNumbe
         </nav>
 
         {activeTab === "overview" && (
-          <div className="profile-content-grid">
+          <div className="profile-content-grid company-only-content-grid">
             <article className="detail-panel company-overview">
               <div className="panel-title"><div><span className="kicker">Companies House</span><h2>Company overview</h2></div><FileText size={20} /></div>
               <dl className="detail-list">
@@ -144,32 +145,10 @@ export default function CompanyPage({ params }: { params: Promise<{ companyNumbe
               </dl>
               <div className="fact-source"><BadgeCheck size={15} /> Source: {profile.company_source.organisation}</div>
             </article>
-            <article className="detail-panel sponsorship-panel">
-              <div className="panel-title"><div><span className="kicker">UK visa sponsorship</span><h2>{sponsorship.label}</h2></div><ShieldCheck size={21} /></div>
-              <StatusPill status={sponsorship.status}>{sponsorship.status.replaceAll("_", " ")}</StatusPill>
-              <p>{sponsorship.explanation}</p>
-              {sponsorship.rating && <div className="rating-row"><span>Sponsor rating</span><strong>{sponsorship.rating}</strong></div>}
-              {sponsorship.routes.length > 0 && <div className="route-list">{sponsorship.routes.map((route) => <span key={route}><Check size={14} />{route}</span>)}</div>}
-            </article>
-            <article className="detail-panel recent-panel">
-              <div className="panel-title"><div><span className="kicker">Version history</span><h2>Recent changes</h2></div><Clock3 size={20} /></div>
-              <div className="no-changes"><span><Check size={20} /></span><strong>No verified changes yet</strong><p>Changes will appear after multiple official dataset versions are stored.</p></div>
-            </article>
-          </div>
-        )}
-
-        {activeTab === "sponsorship" && (
-          <div className="single-panel-layout">
-            <article className="detail-panel wide-panel">
-              <div className="panel-title"><div><span className="kicker">Sponsor-register match</span><h2>{sponsorship.label}</h2></div><ShieldCheck size={22} /></div>
-              <p className="lead-copy">{sponsorship.explanation}</p>
-              <div className="sponsorship-facts">
-                <div><span>Match status</span><StatusPill status={sponsorship.status}>{sponsorship.status.replaceAll("_", " ")}</StatusPill></div>
-                <div><span>Match confidence</span><strong>{sponsorship.match_confidence ? `${Math.round(sponsorship.match_confidence * 100)}%` : "Not available"}</strong></div>
-                <div><span>Match method</span><strong>{sponsorship.match_method || "Not available"}</strong></div>
-                <div><span>Routes</span><strong>{sponsorship.routes.join(", ") || "Not available"}</strong></div>
-              </div>
-              <div className="language-note"><CircleAlert size={18} /><p>An absent match does not prove that an organisation cannot sponsor a worker. It means only that VeriFinder could not find a sufficiently confident match in the latest available dataset.</p></div>
+            <article className="detail-panel separate-sponsor-panel">
+              <div className="panel-title"><div><span className="kicker">Separate source</span><h2>Need a sponsorship check?</h2></div><Search size={21} /></div>
+              <p>Run an independent exact-name lookup against the stored Home Office worker sponsor list. No result from that list will be attached to this Companies House profile.</p>
+              <Link className="button button-secondary" href={`/search?sponsor=${encodeURIComponent(profile.company_name)}#sponsorship-check`}><Search size={16} /> Open sponsorship check</Link>
             </article>
           </div>
         )}
@@ -192,15 +171,12 @@ export default function CompanyPage({ params }: { params: Promise<{ companyNumbe
 
         {activeTab === "sources" && (
           <div className="sources-tab">
-            <div className="sources-tab-intro"><span className="kicker">Audit trail</span><h2>Sources behind this profile</h2><p>Every verified fact is linked to its official source and freshness metadata.</p></div>
-            <div className="source-card-grid">
-              <SourceCard source={profile.company_source} />
-              {sponsorship.source ? <SourceCard source={sponsorship.source} /> : <article className="source-card unavailable-source"><span className="source-card-icon"><Database size={20} /></span><div><span className="source-org">UK Visas and Immigration</span><h3>Sponsor register not ingested</h3><p>This source is unavailable in the current environment, so no negative conclusion is shown.</p></div></article>}
-            </div>
+            <div className="sources-tab-intro"><span className="kicker">Audit trail</span><h2>Source behind this profile</h2><p>Only the Companies House source is used on this page.</p></div>
+            <div className="source-card-grid company-source-card-grid"><SourceCard source={profile.company_source} /></div>
           </div>
         )}
 
-        <p className="disclaimer">Information is based on publicly available sources and should not be treated as legal, financial, immigration or professional advice.</p>
+        <p className="disclaimer">Information is based on the Companies House API and should not be treated as legal, financial, immigration or professional advice.</p>
       </div>
     </div>
   );

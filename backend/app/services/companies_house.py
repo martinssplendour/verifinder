@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import httpx
 
-from app.schemas import CompanyProfile, SearchResult, SourceAttribution, SponsorshipSummary
+from app.schemas import CompanyProfile, SearchResult, SourceAttribution
 
 
 BASE_URL = "https://api.company-information.service.gov.uk"
@@ -17,8 +17,11 @@ class CompaniesHouseClient:
         self.api_key = api_key
 
     async def _get(self, path: str, params: dict | None = None) -> dict:
-        async with httpx.AsyncClient(base_url=BASE_URL, auth=(self.api_key, ""), timeout=12) as client:
-            response = await client.get(path, params=params)
+        try:
+            async with httpx.AsyncClient(base_url=BASE_URL, auth=(self.api_key, ""), timeout=12) as client:
+                response = await client.get(path, params=params)
+        except httpx.HTTPError as error:
+            raise CompaniesHouseError("Companies House could not be reached.") from error
         if response.status_code == 404:
             raise KeyError(path)
         if response.is_error:
@@ -26,7 +29,22 @@ class CompaniesHouseClient:
         return response.json()
 
     async def search(self, query: str, limit: int = 8) -> list[SearchResult]:
+        exact_query = query.strip().casefold()
+        payload = await self._get("/search/companies", {"q": query, "items_per_page": max(limit, 20)})
+        results = self._search_results(payload)
+        return [
+            result
+            for result in results
+            if result.company_name.strip().casefold() == exact_query
+            or result.company_number.strip().casefold() == exact_query
+        ][:limit]
+
+    async def suggestions(self, query: str, limit: int = 4) -> list[SearchResult]:
         payload = await self._get("/search/companies", {"q": query, "items_per_page": limit})
+        return self._search_results(payload)[:limit]
+
+    @staticmethod
+    def _search_results(payload: dict) -> list[SearchResult]:
         return [
             SearchResult(
                 company_number=item["company_number"],
@@ -69,11 +87,6 @@ class CompaniesHouseClient:
             verified_status="verified",
             data_mode="live",
             company_source=source,
-            sponsorship=SponsorshipSummary(
-                status="data_unavailable",
-                label="Sponsorship data unavailable",
-                explanation="No current sponsor-register dataset has been ingested in this environment.",
-            ),
         )
 
     async def officers(self, company_number: str) -> list[dict]:
@@ -87,4 +100,3 @@ class CompaniesHouseClient:
             }
             for item in payload.get("items", [])
         ]
-

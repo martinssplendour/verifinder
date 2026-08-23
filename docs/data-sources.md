@@ -15,12 +15,12 @@ Each live response includes the official company URL and retrieval timestamp. Wh
 
 - Dataset: Register of licensed sponsors: workers
 - Format: official CSV linked from GOV.UK
-- Usage: sponsor search, routes, rating, company matching and sponsor changes
+- Usage: exact-name sponsorship check, routes, rating and sponsor changes
 - Official publication: <https://www.gov.uk/government/publications/register-of-licensed-sponsors-workers>
 
-The loader validates semantic columns, computes SHA-256, preserves the original file, loads normalised organisations and routes, and compares successful snapshots. Company Check queries only the latest successful version. A name match remains separately labelled as a sponsor-register record until the entity-resolution evidence is sufficient to connect it to a Companies House company.
+The loader validates semantic columns, computes SHA-256, preserves the original file, loads organisations and routes, and compares successful snapshots. Sponsorship Check queries only the latest successful stored version. It requires the original organisation name to equal the submitted name, ignoring letter case and outer whitespace. It does not connect the result to a Companies House company.
 
-Absence must be phrased as: “We couldn't find a matching organisation in the latest sponsor-register dataset.” It is not proof that a company cannot sponsor someone.
+No exact result means only that the submitted name was not found exactly in the latest stored sponsor dataset. It is not proof that a differently named organisation is absent or that a particular job or person cannot be sponsored.
 
 ## UK Visas and Immigration — student sponsors
 

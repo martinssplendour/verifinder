@@ -1,26 +1,17 @@
-# Entity resolution
+# Source separation
 
-Companies House companies and sponsor-register organisations are independent source records. A similar name is not sufficient proof that they are the same legal entity.
+Companies House companies and Home Office worker-sponsor organisations are independent source records. VeriFinder does not resolve, merge or score names across these sources.
 
-## Normalisation
+## Lookup rules
 
-Original source values are always retained. Search/matching copies are normalised for:
+- Company Check calls the Companies House API and returns only a company whose registered name or company number exactly equals the submitted query, ignoring letter case.
+- Sponsorship Check queries only the latest successfully stored worker-sponsor dataset and returns only rows whose original organisation name exactly equals the submitted query, ignoring letter case and outer whitespace.
+- Homepage type-ahead is a discovery aid, not a match result. Companies House suggestions are returned by that source's search API; sponsor suggestions are rows whose stored organisation name literally contains the typed text. Selecting one opens that source record directly.
+- Partial names, abbreviation expansion, punctuation normalisation, edit distance, similarity scores, location hints and fuzzy matching are not used for either check.
+- A user may submit the same name to both checks, but the results remain separate and no shared identity is inferred.
 
-- Unicode and case;
-- punctuation and repeated whitespace;
-- `&` / `and`;
-- `LTD` / `LIMITED` and common legal-form punctuation;
-- UK postcode spacing and case.
+## Interpretation
 
-## Match decisions
+A sponsor result establishes only that the displayed organisation name appears in the stored sponsor list. It does not identify a Companies House legal entity. A Companies House result establishes only the legal-company information returned by that API and does not state whether the company holds a sponsor licence.
 
-The first scoring service produces one of:
-
-- `confirmed`: exact comparison name plus a town found in the company’s registered-office record;
-- `likely`: exact normalised name without sufficient location evidence;
-- `possible`: name similarity is meaningful but evidence is insufficient;
-- `unmatched`: similarity is below the review threshold.
-
-Only `confirmed` mappings should automatically support the phrase “Found on the current UK sponsor register.” A `likely` or `possible` mapping should be reviewable and must use qualified copy.
-
-Each persisted mapping keeps confidence, method and whether a human reviewed it. Manual confirmation, rejection and remapping are intended to be permanent audit decisions.
+No exact sponsor-list result means only that the submitted name was not found exactly in the latest stored dataset. Similar names are not substituted and no broader negative conclusion is made.

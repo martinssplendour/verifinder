@@ -6,9 +6,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 
-VerificationStatus = Literal[
-    "verified", "match_found", "possible_match", "no_match", "data_unavailable", "stale", "unknown"
-]
+VerificationStatus = Literal["verified", "data_unavailable", "stale", "unknown"]
 DataMode = Literal["live", "unavailable"]
 
 

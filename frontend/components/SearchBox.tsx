@@ -1,166 +1,206 @@
 "use client";
 
-import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Building2, CircleAlert, LoaderCircle, Search, ShieldCheck } from "lucide-react";
-import { useCompanySponsorSuggestions } from "@/hooks/useCompanySponsorSuggestions";
+import { ArrowRight, Building2, LoaderCircle, Search, ShieldCheck } from "lucide-react";
+import { suggestCompanies, suggestSponsors } from "@/services/api";
 import type { SearchResult, SponsorRecordView } from "@/types";
 
 type Suggestion =
-  | { kind: "company"; id: string; href: string; company: SearchResult }
-  | { kind: "sponsor"; id: string; href: string; sponsor: SponsorRecordView };
+  | { kind: "company"; record: SearchResult }
+  | { kind: "sponsor"; record: SponsorRecordView };
+
+interface SuggestionState {
+  query: string;
+  companies: SearchResult[];
+  sponsors: SponsorRecordView[];
+  loading: boolean;
+}
 
 export function SearchBox({ initialValue = "" }: { initialValue?: string }) {
   const router = useRouter();
   const [query, setQuery] = useState(initialValue);
-  const { companies, sponsors, companyUnavailable, loading, error } = useCompanySponsorSuggestions(query);
-  const [open, setOpen] = useState(false);
+  const [focused, setFocused] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
-  const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hasFocus = useRef(false);
-  const suggestions: Suggestion[] = [
-    ...companies.map((company) => ({
-      kind: "company" as const,
-      id: `company-${company.company_number}`,
-      href: `/company/${company.company_number}`,
-      company,
-    })),
-    ...sponsors.map((sponsor) => ({
-      kind: "sponsor" as const,
-      id: `sponsor-${sponsor.id}`,
-      href: `/sponsor/${sponsor.id}`,
-      sponsor,
-    })),
-  ];
+  const [suggestions, setSuggestions] = useState<SuggestionState>({
+    query: "",
+    companies: [],
+    sponsors: [],
+    loading: false,
+  });
+
+  const value = query.trim();
+  const current = suggestions.query === value && value.length >= 2;
+  const items = useMemo<Suggestion[]>(() => {
+    if (!current) return [];
+    return [
+      ...suggestions.companies.map((record) => ({ kind: "company" as const, record })),
+      ...suggestions.sponsors.map((record) => ({ kind: "sponsor" as const, record })),
+    ];
+  }, [current, suggestions.companies, suggestions.sponsors]);
+  const showSuggestions = focused && value.length >= 2;
 
   useEffect(() => {
-    setOpen(hasFocus.current);
-    setActiveIndex(-1);
-  }, [companies, sponsors]);
+    if (value.length < 2) return;
+    const controller = new AbortController();
+    let active = true;
+    const timer = window.setTimeout(async () => {
+      setSuggestions({ query: value, companies: [], sponsors: [], loading: true });
+      const [companyResult, sponsorResult] = await Promise.allSettled([
+        suggestCompanies(value, controller.signal),
+        suggestSponsors(value, controller.signal),
+      ]);
+      if (!active) return;
+      setSuggestions({
+        query: value,
+        companies: companyResult.status === "fulfilled" ? companyResult.value.results : [],
+        sponsors: sponsorResult.status === "fulfilled" ? sponsorResult.value.results : [],
+        loading: false,
+      });
+      setActiveIndex(-1);
+    }, 220);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [value]);
+
+  function exactChecksUrl() {
+    return `/search?${new URLSearchParams({ company: value, sponsor: value }).toString()}`;
+  }
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (query.trim().length >= 2) {
-      setOpen(false);
-      router.push(`/search?q=${encodeURIComponent(query.trim())}`);
+    if (value.length < 2) return;
+    router.push(exactChecksUrl());
+  }
+
+  function openSuggestion(item: Suggestion) {
+    if (item.kind === "company") {
+      router.push(`/company/${encodeURIComponent(item.record.company_number)}`);
+    } else {
+      router.push(`/sponsor/${encodeURIComponent(item.record.id)}`);
     }
   }
 
-  function openSuggestion(suggestion: Suggestion) {
-    setOpen(false);
-    router.push(suggestion.href);
-  }
-
-  function handleKeys(event: KeyboardEvent<HTMLInputElement>) {
-    if (!open || suggestions.length === 0) return;
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (!showSuggestions || items.length === 0) return;
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      setActiveIndex((current) => Math.min(current + 1, suggestions.length - 1));
+      setActiveIndex((index) => (index + 1) % items.length);
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
-      setActiveIndex((current) => Math.max(current - 1, -1));
+      setActiveIndex((index) => (index <= 0 ? items.length - 1 : index - 1));
     } else if (event.key === "Enter" && activeIndex >= 0) {
       event.preventDefault();
-      openSuggestion(suggestions[activeIndex]);
+      openSuggestion(items[activeIndex]);
     } else if (event.key === "Escape") {
-      setOpen(false);
+      setFocused(false);
+      setActiveIndex(-1);
     }
   }
 
-  function option(suggestion: Suggestion, index: number) {
-    const isCompany = suggestion.kind === "company";
-    const title = isCompany ? suggestion.company.company_name : suggestion.sponsor.organisation_name;
-    const meta = isCompany
-      ? `${suggestion.company.location || "United Kingdom"} · ${suggestion.company.status || "Status unavailable"} · ${suggestion.company.company_number}`
-      : `${suggestion.sponsor.town_city || "Location unavailable"} · ${suggestion.sponsor.rating ? `${suggestion.sponsor.rating} rating` : "Rating unavailable"} · ${suggestion.sponsor.routes.length} route${suggestion.sponsor.routes.length === 1 ? "" : "s"}`;
+  function renderCompany(record: SearchResult, index: number) {
     return (
-      <button
-        type="button"
+      <Link
+        className={`suggestion-row ${activeIndex === index ? "is-active" : ""}`}
+        href={`/company/${encodeURIComponent(record.company_number)}`}
+        id={`source-suggestion-${index}`}
+        key={record.company_number}
         role="option"
-        aria-selected={index === activeIndex}
-        className={`suggestion-row ${index === activeIndex ? "is-active" : ""}`}
-        id={`suggestion-${index}`}
-        key={suggestion.id}
-        onMouseDown={() => {
-          if (blurTimer.current) clearTimeout(blurTimer.current);
-          openSuggestion(suggestion);
-        }}
+        aria-selected={activeIndex === index}
+        onMouseDown={(event) => event.preventDefault()}
       >
-        <span className={`suggestion-icon ${isCompany ? "" : "sponsor-suggestion-icon"}`}>
-          {isCompany ? <Building2 size={18} /> : <ShieldCheck size={18} />}
+        <span className="suggestion-icon"><Building2 size={17} /></span>
+        <span className="suggestion-main">
+          <strong>{record.company_name}</strong>
+          <small>{[record.company_number, record.location, record.status].filter(Boolean).join(" · ")}</small>
         </span>
-        <span className="suggestion-main"><strong>{title}</strong><small>{meta}</small></span>
-        <ArrowRight size={17} />
-      </button>
+        <ArrowRight size={16} />
+      </Link>
+    );
+  }
+
+  function renderSponsor(record: SponsorRecordView, index: number) {
+    return (
+      <Link
+        className={`suggestion-row ${activeIndex === index ? "is-active" : ""}`}
+        href={`/sponsor/${encodeURIComponent(record.id)}`}
+        id={`source-suggestion-${index}`}
+        key={record.id}
+        role="option"
+        aria-selected={activeIndex === index}
+        onMouseDown={(event) => event.preventDefault()}
+      >
+        <span className="suggestion-icon sponsor-suggestion-icon"><ShieldCheck size={17} /></span>
+        <span className="suggestion-main">
+          <strong>{record.organisation_name}</strong>
+          <small>{[record.town_city, record.rating].filter(Boolean).join(" · ")}</small>
+        </span>
+        <ArrowRight size={16} />
+      </Link>
     );
   }
 
   return (
-    <div className="search-combobox">
+    <div className="search-combobox global-exact-search">
       <form className="search-form" onSubmit={submit} role="search">
         <Search className="search-leading" size={21} aria-hidden="true" />
-        <label className="sr-only" htmlFor="global-company-search">Search for a UK company or sponsor</label>
+        <label className="sr-only" htmlFor="global-company-search">Company or sponsor source record</label>
         <input
           id="global-company-search"
           value={query}
           onChange={(event) => {
-            const value = event.target.value;
-            setQuery(value);
-            if (value.trim().length < 2) {
-              setOpen(false);
-            }
+            setQuery(event.target.value);
+            setActiveIndex(-1);
           }}
-          onFocus={() => {
-            hasFocus.current = true;
-            if (query.trim().length >= 2) setOpen(true);
-          }}
-          onBlur={() => {
-            blurTimer.current = setTimeout(() => {
-              hasFocus.current = false;
-              setOpen(false);
-            }, 150);
-          }}
-          onKeyDown={handleKeys}
-          placeholder="Search a company name or number..."
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          onKeyDown={handleKeyDown}
+          placeholder="Start typing a company or sponsor name..."
           autoComplete="off"
-          aria-expanded={open}
-          aria-controls="company-suggestions"
-          aria-activedescendant={activeIndex >= 0 ? `suggestion-${activeIndex}` : undefined}
           role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={showSuggestions}
+          aria-controls="source-suggestions"
+          aria-activedescendant={activeIndex >= 0 ? `source-suggestion-${activeIndex}` : undefined}
         />
-        {loading && <LoaderCircle className="search-spinner" size={19} aria-label="Searching" />}
-        <button type="submit" aria-label="Search verified sources"><Search size={20} /></button>
+        {suggestions.loading && current ? <LoaderCircle className="search-spinner" size={18} aria-label="Loading source suggestions" /> : null}
+        <button type="submit" aria-label="Open the separate exact checks"><Search size={20} /></button>
       </form>
-      {open && (
-        <div className="suggestions" id="company-suggestions" role="listbox">
-          {error ? <p className="suggestion-message error-text">{error}</p> : (
+      {showSuggestions ? (
+        <div className="suggestions" id="source-suggestions" role="listbox" aria-label="Source record suggestions">
+          <div className="suggestion-source-note">
+            Suggestions help you choose a source record. They do not join or verify records across sources.
+          </div>
+          {current && suggestions.companies.length > 0 ? (
             <>
-              {companyUnavailable && (
-                <div className="suggestion-source-note"><CircleAlert size={14} /> Companies House is not connected. Sponsor-register matches remain available.</div>
-              )}
-              {companies.length > 0 && (
-                <>
-                  <div className="suggestions-heading"><span>Companies House</span><span><Building2 size={13} /> Company records</span></div>
-                  {companies.map((company, index) => option(suggestions[index], index))}
-                </>
-              )}
-              {sponsors.length > 0 && (
-                <>
-                  <div className="suggestions-heading sponsor-heading"><span>UK sponsor register</span><span><ShieldCheck size={13} /> Official dataset</span></div>
-                  {sponsors.map((sponsor, index) => {
-                    const suggestionIndex = companies.length + index;
-                    return option(suggestions[suggestionIndex], suggestionIndex);
-                  })}
-                </>
-              )}
-              {!loading && suggestions.length === 0 && <p className="suggestion-message">No matching verified record found. Check the spelling or try a company number.</p>}
+              <div className="suggestions-heading"><span>Companies House suggestions</span><span>Company source</span></div>
+              {suggestions.companies.map((record, index) => renderCompany(record, index))}
             </>
-          )}
-          <button className="view-results" type="button" onMouseDown={() => router.push(`/search?q=${encodeURIComponent(query.trim())}`)}>
-            View all Company Check results <ArrowRight size={15} />
+          ) : null}
+          {current && suggestions.sponsors.length > 0 ? (
+            <>
+              <div className="suggestions-heading sponsor-heading"><span>Stored sponsor-list suggestions</span><span>Sponsor source</span></div>
+              {suggestions.sponsors.map((record, index) => renderSponsor(record, suggestions.companies.length + index))}
+            </>
+          ) : null}
+          {current && !suggestions.loading && items.length === 0 ? (
+            <p className="suggestion-message">No source records contain that typed text. You can still run the separate exact checks.</p>
+          ) : null}
+          <button
+            className="view-results"
+            type="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => value.length >= 2 && router.push(exactChecksUrl())}
+          >
+            Run two separate exact checks <ArrowRight size={14} />
           </button>
         </div>
-      )}
+      ) : null}
+      <p className="global-search-helper">Choose a source record, or run the same exact text through two independent checks. Each name can be changed on the results page.</p>
     </div>
   );
 }

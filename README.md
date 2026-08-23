@@ -1,8 +1,9 @@
 # VeriFinder
 
-VeriFinder is a provenance-first public-data product built around one promise: **check before you decide**. It currently ships seven working checks:
+VeriFinder is a provenance-first public-data product built around one promise: **check before you decide**. It currently ships eight working checks:
 
-- **Company Check** — Companies House records plus separately labelled Home Office sponsor-register matches.
+- **Company Check** — exact-name or company-number Companies House records, with no sponsorship data attached.
+- **Sponsorship Check** — exact-name rows from the latest stored Home Office worker sponsor list, with no Companies House entity inferred.
 - **Qualification Check** — Ofqual/CCEA records for England and Northern Ireland, Ofqual unit mappings, and the Qualifications Wales QiW register.
 - **Food Check** — Food Standards Agency hygiene ratings across the UK, preserving the FHRS/FHIS scheme labels.
 - **Area Check** — Ordnance Survey postcode points combined with Police.uk crime, Planning Data designations and Environment Agency flood warnings.
@@ -142,9 +143,10 @@ npm run build
 ## API routes
 
 - `GET /api/search?q=`
+- `GET /api/search/suggestions?q=`
 - `GET /api/companies/{company_number}`
-- `GET /api/companies/{company_number}/sponsorship`
 - `GET /api/sponsors/search?q=`
+- `GET /api/sponsors/suggestions?q=`
 - `GET /api/sponsors/{record_id}`
 - `GET /api/qualifications/search?q=`
 - `GET /api/qualifications/{record_id}`

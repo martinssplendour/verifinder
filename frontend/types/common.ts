@@ -1,9 +1,6 @@
 export type DataMode = "live" | "unavailable";
 export type VerificationStatus =
   | "verified"
-  | "match_found"
-  | "possible_match"
-  | "no_match"
   | "data_unavailable"
   | "stale"
   | "unknown";

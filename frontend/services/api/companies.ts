@@ -5,6 +5,10 @@ export function searchCompanies(query: string, signal?: AbortSignal) {
   return apiFetch<SearchResponse>(`/search?q=${encodeURIComponent(query)}`, signal);
 }
 
+export function suggestCompanies(query: string, signal?: AbortSignal) {
+  return apiFetch<SearchResponse>(`/search/suggestions?q=${encodeURIComponent(query)}&limit=4`, signal);
+}
+
 export function getCompany(companyNumber: string, signal?: AbortSignal) {
   return apiFetch<CompanyProfile>(`/companies/${encodeURIComponent(companyNumber)}`, signal);
 }

@@ -72,7 +72,7 @@ def test_exports_verifies_and_queries_public_snapshot(tmp_path):
         stored = session.scalar(select(SponsorRecord).where(SponsorRecord.id == "sponsor-1"))
         assert stored is not None
         assert stored.organisation_name == "Revolut Ltd"
-        results, context = search_sponsor_records(session, "Revolut", limit=10)
+        results, context = search_sponsor_records(session, "Revolut Ltd", limit=10)
 
     assert context is not None
     assert [result.organisation_name for result in results] == ["Revolut Ltd"]

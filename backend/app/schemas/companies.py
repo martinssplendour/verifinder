@@ -7,17 +7,6 @@ from pydantic import BaseModel, Field
 from app.schemas.common import DataMode, SourceAttribution, VerificationStatus
 
 
-class SponsorshipSummary(BaseModel):
-    status: VerificationStatus
-    label: str
-    explanation: str
-    routes: list[str] = Field(default_factory=list)
-    rating: str | None = None
-    match_confidence: float | None = None
-    match_method: str | None = None
-    source: SourceAttribution | None = None
-
-
 class CompanyProfile(BaseModel):
     company_number: str
     company_name: str
@@ -31,7 +20,6 @@ class CompanyProfile(BaseModel):
     verified_status: VerificationStatus
     data_mode: DataMode
     company_source: SourceAttribution
-    sponsorship: SponsorshipSummary
 
 
 class Officer(BaseModel):

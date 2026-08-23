@@ -9,11 +9,15 @@ export function DatasetSearchForm({
   action,
   label,
   placeholder,
+  queryParam = "q",
+  retainedParams = {},
 }: {
   initialValue?: string;
   action: string;
   label: string;
   placeholder: string;
+  queryParam?: string;
+  retainedParams?: Record<string, string>;
 }) {
   const router = useRouter();
   const [query, setQuery] = useState(initialValue);
@@ -21,15 +25,20 @@ export function DatasetSearchForm({
   function submit(event: FormEvent) {
     event.preventDefault();
     const value = query.trim();
-    if (value.length >= 2) router.push(`${action}?q=${encodeURIComponent(value)}`);
+    if (value.length < 2) return;
+    const params = new URLSearchParams(retainedParams);
+    params.set(queryParam, value);
+    router.push(`${action}?${params.toString()}`);
   }
+
+  const inputId = `${action}-${queryParam}-search`.replaceAll("/", "-");
 
   return (
     <form className="search-form dataset-search-form" onSubmit={submit} role="search">
       <Search className="search-leading" size={21} aria-hidden="true" />
-      <label className="sr-only" htmlFor={`${action}-search`}>{label}</label>
+      <label className="sr-only" htmlFor={inputId}>{label}</label>
       <input
-        id={`${action}-search`}
+        id={inputId}
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         placeholder={placeholder}

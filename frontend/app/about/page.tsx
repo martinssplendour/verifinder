@@ -1,10 +1,10 @@
-import { ArrowDown, BadgeCheck, Building2, Database, FileArchive, GitCompareArrows, ShieldCheck } from "lucide-react";
+import { ArrowDown, BadgeCheck, Building2, Columns2, Database, FileArchive, ShieldCheck } from "lucide-react";
 
 const FLOW = [
   { icon: ShieldCheck, title: "Official source", copy: "Companies House or the UK Home Office" },
   { icon: FileArchive, title: "Versioned data", copy: "Raw input retained with a file hash" },
   { icon: Database, title: "Normalised record", copy: "Original values preserved for audit" },
-  { icon: GitCompareArrows, title: "Resolved entity", copy: "Matches carry method and confidence" },
+  { icon: Columns2, title: "Separate checks", copy: "Independent sources are not merged by name" },
   { icon: BadgeCheck, title: "Verified fact", copy: "Source metadata travels with the answer" },
 ];
 
@@ -32,4 +32,3 @@ export default function AboutPage() {
     </div>
   );
 }
-

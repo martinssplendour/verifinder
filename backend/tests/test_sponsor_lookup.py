@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.database import Base
 from app.models import DataSource, DatasetVersion, RunStatus, SourceHealth, SponsorRecord
-from app.services.sponsor_lookup import get_sponsor_record, resolve_company_sponsorship, search_sponsor_records
+from app.services.sponsor_lookup import get_sponsor_record, search_sponsor_records, suggest_sponsor_records
 
 
 def sponsor_session() -> Session:
@@ -65,43 +65,44 @@ def sponsor_session() -> Session:
     return session
 
 
-def test_exact_name_and_town_returns_confirmed_sponsor_with_provenance():
+def test_sponsor_register_returns_only_an_exact_source_name():
     session = sponsor_session()
-    resolution = resolve_company_sponsorship(
-        session,
-        company_name="NORTHSTAR LABS LIMITED",
-        registered_office="7 Westferry Circus, London, E14 4HD",
-    )
-    assert resolution.summary.status == "match_found"
-    assert resolution.summary.routes == ["Scale-up", "Skilled Worker"]
-    assert resolution.summary.rating == "A"
-    assert resolution.summary.source is not None
-    assert resolution.summary.source.version == "2026-08-20-example"
-
-
-def test_no_match_is_limited_to_latest_dataset_and_keeps_source():
-    session = sponsor_session()
-    resolution = resolve_company_sponsorship(
-        session,
-        company_name="Unrelated Example Limited",
-        registered_office="Bristol",
-    )
-    assert resolution.summary.status == "no_match"
-    assert "does not prove" in resolution.summary.explanation
-    assert resolution.summary.source is not None
-
-
-def test_sponsor_register_can_be_searched_by_partial_company_name():
-    session = sponsor_session()
-    results, context = search_sponsor_records(session, "northstar", limit=5)
+    results, context = search_sponsor_records(session, "Northstar Labs Ltd", limit=5)
     assert context is not None
-    assert len(results) == 2
-    assert {result.organisation_name for result in results} == {"Northstar Arts CIO", "Northstar Labs Ltd"}
-    lab_result = next(result for result in results if result.organisation_name == "Northstar Labs Ltd")
-    assert lab_result.routes == ["Scale-up", "Skilled Worker"]
+    assert [result.organisation_name for result in results] == ["Northstar Labs Ltd"]
+    assert results[0].routes == ["Scale-up", "Skilled Worker"]
 
 
-def test_whole_word_match_excludes_longer_prefix_lookalikes():
+def test_exact_sponsor_search_is_case_insensitive():
+    session = sponsor_session()
+    results, _ = search_sponsor_records(session, "NORTHSTAR LABS LTD", limit=5)
+    assert [result.organisation_name for result in results] == ["Northstar Labs Ltd"]
+
+
+def test_partial_or_similar_sponsor_names_are_not_returned():
+    session = sponsor_session()
+    partial, _ = search_sponsor_records(session, "Northstar", limit=5)
+    similar, _ = search_sponsor_records(session, "Northstar Lab Ltd", limit=5)
+    expanded_suffix, _ = search_sponsor_records(session, "Northstar Labs Limited", limit=5)
+    assert partial == []
+    assert similar == []
+    assert expanded_suffix == []
+
+
+def test_sponsor_suggestions_use_literal_stored_name_fragments_only():
+    session = sponsor_session()
+    partial, _ = suggest_sponsor_records(session, "Northstar", limit=5)
+    typo, _ = suggest_sponsor_records(session, "Northstor", limit=5)
+    expanded_suffix, _ = suggest_sponsor_records(session, "Northstar Labs Limited", limit=5)
+    assert [result.organisation_name for result in partial] == [
+        "Northstar Arts CIO",
+        "Northstar Labs Ltd",
+    ]
+    assert typo == []
+    assert expanded_suffix == []
+
+
+def test_exact_name_excludes_longer_lookalikes():
     session = sponsor_session()
     session.add_all(
         [
@@ -132,13 +133,13 @@ def test_whole_word_match_excludes_longer_prefix_lookalikes():
         ]
     )
     session.commit()
-    results, _ = search_sponsor_records(session, "Revolut", limit=10)
+    results, _ = search_sponsor_records(session, "Revolut Ltd", limit=10)
     assert [result.organisation_name for result in results] == ["Revolut Ltd"]
 
 
 def test_sponsor_record_detail_is_limited_to_latest_version():
     session = sponsor_session()
-    results, _ = search_sponsor_records(session, "Northstar Labs", limit=5)
+    results, _ = search_sponsor_records(session, "Northstar Labs Ltd", limit=5)
     detail = get_sponsor_record(session, results[0].id)
     assert detail is not None
     assert detail.source.health == "healthy"
