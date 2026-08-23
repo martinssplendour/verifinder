@@ -8,6 +8,7 @@ from app.services.qualification_lookup import (
     latest_qualification_context,
     latest_welsh_qualification_context,
     search_qualifications,
+    similar_qualifications,
 )
 
 
@@ -26,12 +27,14 @@ async def qualification_search(
         for item in (latest_qualification_context(session), latest_welsh_qualification_context(session))
         if item
     ]
+    suggestions = [] if results or context is None else similar_qualifications(session, q)
     return QualificationSearchResponse(
         query=q,
         results=results,
         total=len(results),
         dataset_version=" · ".join(item[1].version_identifier for item in contexts) or None,
         message=None if context else "No qualification register has been imported.",
+        suggestions=suggestions,
     )
 
 

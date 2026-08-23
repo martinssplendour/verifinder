@@ -45,6 +45,7 @@ export interface SchoolSearchResponse {
   total: number;
   dataset_version: string | null;
   message: string | null;
+  suggestions: SchoolSearchResult[];
 }
 
 export interface SchoolDetail {

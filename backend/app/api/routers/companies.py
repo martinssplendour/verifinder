@@ -44,10 +44,16 @@ async def search(q: str = Query(min_length=2, max_length=160), limit: int = Quer
             message=COMPANIES_HOUSE_UNAVAILABLE,
         )
     try:
-        results = await client.search(q, limit)
+        results, suggestions = await client.search_with_suggestions(q, limit)
     except CompaniesHouseError as error:
         raise HTTPException(status_code=502, detail=str(error)) from error
-    return SearchResponse(query=q, results=results, total=len(results), data_mode="live")
+    return SearchResponse(
+        query=q,
+        results=results,
+        total=len(results),
+        data_mode="live",
+        suggestions=suggestions,
+    )
 
 
 @router.get("/search/suggestions", response_model=SearchResponse)

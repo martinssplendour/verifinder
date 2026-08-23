@@ -8,14 +8,42 @@ import {
   CircleAlert,
   LoaderCircle,
   MapPin,
-  SearchX,
   ShieldCheck,
 } from "lucide-react";
+import { NoRecordsFound } from "@/components/NoRecordsFound";
 import { searchCompanies, searchSponsors } from "@/services/api";
-import type { SearchResponse, SponsorSearchResponse } from "@/types";
+import type { SearchResponse, SearchResult, SponsorRecordView, SponsorSearchResponse } from "@/types";
 
 type SearchMode = "all" | "company" | "sponsor";
 type SearchError = { query: string; message: string };
+
+function CompanyCard({ result }: { result: SearchResult }) {
+  return (
+    <Link href={`/company/${result.company_number}`} className="result-card">
+      <span className="result-icon"><Building2 size={23} /></span>
+      <div className="result-title"><h2>{result.company_name}</h2><p>Company number {result.company_number}</p></div>
+      <div className="result-meta">
+        <span className={`dot-status ${result.status === "active" ? "is-active" : ""}`}>{result.status || "Status unavailable"}</span>
+        <span><MapPin size={14} /> {result.location || "Location unavailable"}</span>
+      </div>
+      <span className="result-open">View company <ArrowRight size={16} /></span>
+    </Link>
+  );
+}
+
+function SponsorCard({ result }: { result: SponsorRecordView }) {
+  return (
+    <Link href={`/sponsor/${result.id}`} className="result-card sponsor-result-card">
+      <span className="result-icon sponsor-result-icon"><ShieldCheck size={23} /></span>
+      <div className="result-title"><h2>{result.organisation_name}</h2><p>{result.routes.join(" · ") || "Sponsor record"}</p></div>
+      <div className="result-meta">
+        <span className="dot-status is-active">{result.rating || "Rating unavailable"}</span>
+        <span><MapPin size={14} /> {[result.town_city, result.county].filter(Boolean).join(", ") || "Location unavailable"}</span>
+      </div>
+      <span className="result-open">View sponsor <ArrowRight size={16} /></span>
+    </Link>
+  );
+}
 
 function CompanyGroup({ data }: { data: SearchResponse }) {
   if (data.results.length === 0) return null;
@@ -26,17 +54,7 @@ function CompanyGroup({ data }: { data: SearchResponse }) {
         <span>{data.results.length} found</span>
       </div>
       <div className="result-list">
-        {data.results.map((result) => (
-          <Link href={`/company/${result.company_number}`} className="result-card" key={result.company_number}>
-            <span className="result-icon"><Building2 size={23} /></span>
-            <div className="result-title"><h2>{result.company_name}</h2><p>Company number {result.company_number}</p></div>
-            <div className="result-meta">
-              <span className={`dot-status ${result.status === "active" ? "is-active" : ""}`}>{result.status || "Status unavailable"}</span>
-              <span><MapPin size={14} /> {result.location || "Location unavailable"}</span>
-            </div>
-            <span className="result-open">View company <ArrowRight size={16} /></span>
-          </Link>
-        ))}
+        {data.results.map((result) => <CompanyCard result={result} key={result.company_number} />)}
       </div>
     </section>
   );
@@ -51,17 +69,7 @@ function SponsorGroup({ data }: { data: SponsorSearchResponse }) {
         <span>{data.results.length} found</span>
       </div>
       <div className="result-list">
-        {data.results.map((result) => (
-          <Link href={`/sponsor/${result.id}`} className="result-card sponsor-result-card" key={result.id}>
-            <span className="result-icon sponsor-result-icon"><ShieldCheck size={23} /></span>
-            <div className="result-title"><h2>{result.organisation_name}</h2><p>{result.routes.join(" · ") || "Sponsor record"}</p></div>
-            <div className="result-meta">
-              <span className="dot-status is-active">{result.rating || "Rating unavailable"}</span>
-              <span><MapPin size={14} /> {[result.town_city, result.county].filter(Boolean).join(", ") || "Location unavailable"}</span>
-            </div>
-            <span className="result-open">View sponsor <ArrowRight size={16} /></span>
-          </Link>
-        ))}
+        {data.results.map((result) => <SponsorCard result={result} key={result.id} />)}
       </div>
     </section>
   );
@@ -121,6 +129,10 @@ export function CompanySponsorSearchResults({
   const companyIssue = currentCompanyError?.message || (companyData?.data_mode === "unavailable" ? companyData.message : null);
   const sponsorIssue = currentSponsorError?.message || sponsorData?.message || null;
   const found = (companyData?.results.length || 0) + (sponsorData?.results.length || 0);
+  const suggestions = [
+    ...(companyData?.suggestions || []).map((result) => <CompanyCard result={result} key={`company-${result.company_number}`} />),
+    ...(sponsorData?.suggestions || []).map((result) => <SponsorCard result={result} key={`sponsor-${result.id}`} />),
+  ];
 
   return (
     <div className="source-search-results">
@@ -129,7 +141,9 @@ export function CompanySponsorSearchResults({
       {companyData ? <CompanyGroup data={companyData} /> : null}
       {sponsorData ? <SponsorGroup data={sponsorData} /> : null}
       {found === 0 && !companyIssue && !sponsorIssue ? (
-        <div className="empty-state"><SearchX size={28} /><h2>No records found for “{query}”</h2></div>
+        <NoRecordsFound query={query} hint="These registers are matched on the exact legal name or number, so a small difference in spelling or suffix returns nothing.">
+          {suggestions}
+        </NoRecordsFound>
       ) : null}
     </div>
   );

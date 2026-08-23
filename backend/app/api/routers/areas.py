@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_read_db
 from app.schemas import AreaCheckResponse
-from app.services.area_lookup import get_area_check, latest_postcode_context
+from app.services.area_lookup import get_area_check, latest_postcode_context, suggest_postcodes
 
 
 router = APIRouter()
@@ -18,5 +18,11 @@ async def area_check(
     if result is None:
         if latest_postcode_context(session) is None:
             raise HTTPException(status_code=503, detail="The Code-Point Open postcode dataset has not been imported.")
-        raise HTTPException(status_code=404, detail="Postcode not found in the current Great Britain postcode snapshot.")
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "message": "No records found for that postcode in the current Great Britain postcode snapshot.",
+                "suggestions": suggest_postcodes(session, postcode),
+            },
+        )
     return result

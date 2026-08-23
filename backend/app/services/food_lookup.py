@@ -7,9 +7,15 @@ from sqlalchemy.orm import Session
 
 from app.models import DataSource, DatasetVersion, FoodEstablishmentRecord, RunStatus
 from app.schemas import FoodEstablishmentSearchResult, FoodEstablishmentView, SourceAttribution
-from app.services.dataset_utils import normalise_postcode
+from app.services.dataset_utils import looks_like_postcode, normalise_postcode
 from app.services.food_loader import SOURCE_ID
 from app.services.normalization import normalise_name
+from app.services.search_suggestions import (
+    CANDIDATE_LIMIT,
+    SUGGESTION_LIMIT,
+    candidate_filter,
+    rank_near_matches,
+)
 
 
 def latest_food_context(session: Session) -> tuple[DataSource, DatasetVersion] | None:
@@ -100,6 +106,39 @@ def search_food_establishments(
     ranked = sorted(candidates, key=lambda record: (-score(record), record.business_name.lower()))[:limit]
     source = _source(context)
     return [_search_view(record, source) for record in ranked], context
+
+
+def similar_food_establishments(
+    session: Session, query: str, limit: int = SUGGESTION_LIMIT
+) -> list[FoodEstablishmentSearchResult]:
+    """Close business names to offer when the ratings search matched nothing."""
+    context = latest_food_context(session)
+    if not context:
+        return []
+    _, version = context
+    name_query = normalise_name(query)
+    postcode_query = normalise_postcode(query)
+    by_postcode = looks_like_postcode(query) and bool(postcode_query)
+    column = FoodEstablishmentRecord.normalised_postcode if by_postcode else FoodEstablishmentRecord.normalised_name
+    target = (postcode_query or "") if by_postcode else name_query
+    condition = candidate_filter(column, target)
+    if condition is None:
+        return []
+    candidates = list(
+        session.scalars(
+            select(FoodEstablishmentRecord)
+            .where(FoodEstablishmentRecord.dataset_version_id == version.id, condition)
+            .limit(CANDIDATE_LIMIT)
+        )
+    )
+    key = (
+        (lambda record: record.normalised_postcode)
+        if by_postcode
+        else (lambda record: record.normalised_name)
+    )
+    ranked = rank_near_matches(candidates, target, key, limit)
+    source = _source(context)
+    return [_search_view(record, source) for record in ranked]
 
 
 def get_food_establishment(session: Session, record_id: str) -> FoodEstablishmentView | None:

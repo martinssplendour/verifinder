@@ -6,6 +6,13 @@ from sqlalchemy.orm import Session
 
 from app.models import DataSource, DatasetVersion, RunStatus, SponsorRecord
 from app.schemas import SourceAttribution, SponsorRecordView
+from app.services.normalization import normalise_name
+from app.services.search_suggestions import (
+    CANDIDATE_LIMIT,
+    SUGGESTION_LIMIT,
+    candidate_filter,
+    rank_near_matches,
+)
 from app.services.sponsor_loader import OFFICIAL_URL, SOURCE_ID
 
 
@@ -86,6 +93,39 @@ def search_sponsor_records(session: Session, query: str, limit: int = 8) -> tupl
         )
     )
     return [sponsor_record_view(record, context) for record in records], context
+
+
+def similar_sponsor_records(
+    session: Session,
+    query: str,
+    limit: int = SUGGESTION_LIMIT,
+) -> tuple[list[SponsorRecordView], SponsorContext | None]:
+    """Close names to offer when an exact organisation name matched nothing.
+
+    Unlike the typeahead suggestions these tolerate typos, because the point is
+    to answer "did I spell it wrong?" after the register has already said no.
+    """
+    context = latest_sponsor_context(session)
+    if context is None:
+        return [], None
+    normalised = normalise_name(query)
+    condition = candidate_filter(SponsorRecord.normalised_name, normalised)
+    if condition is None:
+        return [], context
+
+    candidates = list(
+        session.scalars(
+            select(SponsorRecord)
+            .where(
+                SponsorRecord.dataset_version_id == context.version.id,
+                SponsorRecord.active.is_(True),
+                condition,
+            )
+            .limit(CANDIDATE_LIMIT)
+        )
+    )
+    ranked = rank_near_matches(candidates, normalised, lambda record: record.normalised_name, limit)
+    return [sponsor_record_view(record, context) for record in ranked], context
 
 
 def suggest_sponsor_records(

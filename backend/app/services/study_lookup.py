@@ -9,6 +9,12 @@ from app.models import DataSource, DatasetVersion, OfsProviderRecord, RunStatus,
 from app.schemas import SourceAttribution, StudyProviderDetail, StudyProviderSearchResult
 from app.services.dataset_utils import normalise_identifier
 from app.services.normalization import normalise_name
+from app.services.search_suggestions import (
+    CANDIDATE_LIMIT,
+    SUGGESTION_LIMIT,
+    candidate_filter,
+    rank_near_matches,
+)
 from app.services.study_loader import OFS_SOURCE_ID, STUDENT_SOURCE_ID
 
 
@@ -154,6 +160,52 @@ def search_study_providers(
         source = source_attribution(ofs_context)
         results.extend(_ofs_view(record, source) for record in _ranked_ofs_records(session, ofs_context, query, per_source_limit))
     return results, student_context, ofs_context
+
+
+def similar_study_providers(
+    session: Session, query: str, limit: int = SUGGESTION_LIMIT
+) -> list[StudyProviderSearchResult]:
+    """Close provider names to offer when neither study register matched."""
+    normalised = normalise_name(query)
+    results: list[StudyProviderSearchResult] = []
+
+    student_context = latest_student_sponsor_context(session)
+    if student_context:
+        condition = candidate_filter(StudentSponsorRecord.normalised_name, normalised)
+        if condition is not None:
+            _, version = student_context
+            candidates = list(
+                session.scalars(
+                    select(StudentSponsorRecord)
+                    .where(StudentSponsorRecord.dataset_version_id == version.id, condition)
+                    .limit(CANDIDATE_LIMIT)
+                )
+            )
+            source = source_attribution(student_context)
+            results.extend(
+                _student_view(record, source)
+                for record in rank_near_matches(candidates, normalised, lambda record: record.normalised_name, limit)
+            )
+
+    ofs_context = latest_ofs_context(session)
+    if ofs_context:
+        condition = candidate_filter(OfsProviderRecord.normalised_name, normalised)
+        if condition is not None:
+            _, version = ofs_context
+            candidates = list(
+                session.scalars(
+                    select(OfsProviderRecord)
+                    .where(OfsProviderRecord.dataset_version_id == version.id, condition)
+                    .limit(CANDIDATE_LIMIT)
+                )
+            )
+            source = source_attribution(ofs_context)
+            results.extend(
+                _ofs_view(record, source)
+                for record in rank_near_matches(candidates, normalised, lambda record: record.normalised_name, limit)
+            )
+
+    return results[: limit * 2]
 
 
 def _matching_ofs(session: Session, record: StudentSponsorRecord) -> StudyProviderSearchResult | None:

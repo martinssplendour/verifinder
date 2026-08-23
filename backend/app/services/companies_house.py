@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import httpx
 
 from app.schemas import CompanyProfile, SearchResult, SourceAttribution
+from app.services.search_suggestions import SUGGESTION_LIMIT
 
 
 BASE_URL = "https://api.company-information.service.gov.uk"
@@ -29,15 +30,29 @@ class CompaniesHouseClient:
         return response.json()
 
     async def search(self, query: str, limit: int = 8) -> list[SearchResult]:
+        exact, _ = await self.search_with_suggestions(query, limit)
+        return exact
+
+    async def search_with_suggestions(
+        self, query: str, limit: int = 8, suggestion_limit: int = SUGGESTION_LIMIT
+    ) -> tuple[list[SearchResult], list[SearchResult]]:
+        """Exact register matches, plus the closest names when there are none.
+
+        Companies House already ranks its own search, so a miss on the exact
+        name can reuse that ranking as near matches without a second request.
+        """
         exact_query = query.strip().casefold()
         payload = await self._get("/search/companies", {"q": query, "items_per_page": max(limit, 20)})
         results = self._search_results(payload)
-        return [
+        exact = [
             result
             for result in results
             if result.company_name.strip().casefold() == exact_query
             or result.company_number.strip().casefold() == exact_query
         ][:limit]
+        if exact:
+            return exact, []
+        return [], results[:suggestion_limit]
 
     async def suggestions(self, query: str, limit: int = 4) -> list[SearchResult]:
         payload = await self._get("/search/companies", {"q": query, "items_per_page": limit})

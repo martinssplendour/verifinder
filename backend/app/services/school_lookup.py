@@ -10,6 +10,12 @@ from app.schemas import OfstedInspectionSummary, SchoolDetail, SchoolSearchResul
 from app.services.dataset_utils import normalise_identifier, normalise_postcode
 from app.services.gias_loader import SOURCE_ID as GIAS_SOURCE_ID
 from app.services.normalization import normalise_name
+from app.services.search_suggestions import (
+    CANDIDATE_LIMIT,
+    SUGGESTION_LIMIT,
+    candidate_filter,
+    rank_near_matches,
+)
 from app.services.ofsted_loader import SOURCE_ID as OFSTED_SOURCE_ID
 
 
@@ -106,6 +112,28 @@ def search_schools(session: Session, query: str, limit: int = 10) -> tuple[list[
     source = _attribution(context)
     results = [_search_view(record, source) for record in _ranked_schools(session, context, query, limit)]
     return results, context
+
+
+def similar_schools(session: Session, query: str, limit: int = SUGGESTION_LIMIT) -> list[SchoolSearchResult]:
+    """Close establishment names to offer when the GIAS search matched nothing."""
+    context = latest_school_context(session)
+    if context is None:
+        return []
+    _, version = context
+    normalised = normalise_name(query)
+    condition = candidate_filter(SchoolRecord.normalised_name, normalised)
+    if condition is None:
+        return []
+    candidates = list(
+        session.scalars(
+            select(SchoolRecord)
+            .where(SchoolRecord.dataset_version_id == version.id, condition)
+            .limit(CANDIDATE_LIMIT)
+        )
+    )
+    ranked = rank_near_matches(candidates, normalised, lambda record: record.normalised_name, limit)
+    source = _attribution(context)
+    return [_search_view(record, source) for record in ranked]
 
 
 def _ofsted_summary(session: Session, urn: str) -> OfstedInspectionSummary:

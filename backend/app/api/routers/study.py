@@ -3,7 +3,11 @@ from sqlalchemy.orm import Session
 
 from app.database import get_read_db
 from app.schemas import StudyProviderDetail, StudyProviderSearchResponse
-from app.services.study_lookup import get_study_provider, search_study_providers
+from app.services.study_lookup import (
+    get_study_provider,
+    search_study_providers,
+    similar_study_providers,
+)
 
 
 router = APIRouter()
@@ -16,11 +20,14 @@ async def study_provider_search(
     session: Session = Depends(get_read_db),
 ):
     results, student_context, ofs_context = search_study_providers(session, q, limit)
+    has_register = bool(student_context or ofs_context)
+    suggestions = [] if results or not has_register else similar_study_providers(session, q)
     return StudyProviderSearchResponse(
         query=q,
         results=results,
         total=len(results),
-        message=None if student_context or ofs_context else "No study-provider register has been imported.",
+        message=None if has_register else "No study-provider register has been imported.",
+        suggestions=suggestions,
     )
 
 

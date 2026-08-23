@@ -5,8 +5,25 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ArrowRight, Award, BadgeCheck, BookOpenCheck, CircleAlert, LoaderCircle, SearchX } from "lucide-react";
 import { DatasetSearchForm } from "@/components/DatasetSearchForm";
+import { NoRecordsFound } from "@/components/NoRecordsFound";
 import { searchQualifications } from "@/services/api";
 import type { QualificationSearchResponse, QualificationSearchResult } from "@/types";
+
+function QualificationCard({ result }: { result: QualificationSearchResult }) {
+  const available = result.status?.toLowerCase().includes("available") && !result.status.toLowerCase().includes("no longer");
+  const tone = result.record_type === "qiw" ? "qiw-icon" : "";
+  return (
+    <Link href={`/qualification/${result.id}`} className="result-card qualification-result-card">
+      <span className={`result-icon qualification-result-icon ${tone}`}><Award size={23} /></span>
+      <div className="result-title"><h2>{result.title}</h2><p>{result.qualification_number} · {result.awarding_organisation_name}</p></div>
+      <div className="result-meta">
+        <span className={`dot-status ${available ? "is-active" : ""}`}><BadgeCheck size={13} /> {result.status || "Status unavailable"}</span>
+        <span>{[result.level, result.jurisdiction].filter(Boolean).join(" · ")}</span>
+      </div>
+      <span className="result-open">View qualification <ArrowRight size={16} /></span>
+    </Link>
+  );
+}
 
 function QualificationGroup({ heading, description, results, tone }: {
   heading: string;
@@ -22,20 +39,7 @@ function QualificationGroup({ heading, description, results, tone }: {
         <span>{results.length} found</span>
       </div>
       <div className="result-list">
-        {results.map((result) => {
-          const available = result.status?.toLowerCase().includes("available") && !result.status.toLowerCase().includes("no longer");
-          return (
-            <Link href={`/qualification/${result.id}`} className="result-card qualification-result-card" key={`${result.record_type}-${result.id}`}>
-              <span className={`result-icon qualification-result-icon ${tone === "qiw" ? "qiw-icon" : ""}`}><Award size={23} /></span>
-              <div className="result-title"><h2>{result.title}</h2><p>{result.qualification_number} · {result.awarding_organisation_name}</p></div>
-              <div className="result-meta">
-                <span className={`dot-status ${available ? "is-active" : ""}`}><BadgeCheck size={13} /> {result.status || "Status unavailable"}</span>
-                <span>{[result.level, result.jurisdiction].filter(Boolean).join(" · ")}</span>
-              </div>
-              <span className="result-open">View qualification <ArrowRight size={16} /></span>
-            </Link>
-          );
-        })}
+        {results.map((result) => <QualificationCard result={result} key={`${result.record_type}-${result.id}`} />)}
       </div>
     </section>
   );
@@ -77,7 +81,9 @@ function QualificationResults() {
       ) : !current ? (
         <div className="loading-state"><LoaderCircle size={22} /> Searching connected qualification registers…</div>
       ) : current.results.length === 0 ? (
-        <div className="empty-state"><SearchX size={28} /><h2>No matching regulated qualification found</h2><p>Check the title or number. No match does not, by itself, prove that a qualification is invalid.</p></div>
+        <NoRecordsFound query={query} hint="Check the title or number. No match does not, by itself, prove that a qualification is invalid.">
+          {current.suggestions.map((result) => <QualificationCard result={result} key={`${result.record_type}-${result.id}`} />)}
+        </NoRecordsFound>
       ) : (
         <>
           <QualificationGroup heading="Ofqual / CCEA Regulation" description="England and Northern Ireland regulated qualification records" results={ofqual} tone="ofqual" />

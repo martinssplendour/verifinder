@@ -213,6 +213,23 @@ button { color: inherit; }
 .dot-status.is-active { color: var(--green); }
 .dot-status.is-active::before { background: #40a96b; }
 .result-open { display: flex; align-items: center; gap: 5px; color: var(--brand); font-size: 12px; font-weight: 700; }
+
+/* No-records answer: the miss, then near matches kept visibly subordinate */
+.no-records { margin-top: 8px; }
+.no-records-notice { min-height: 190px; padding: 32px 30px 28px; }
+.suggestion-group { margin-top: 14px; }
+.suggestion-group-heading { border-color: #eadfc6; background: #fffdf6; }
+.suggestion-group-heading p { max-width: 640px; }
+.suggestion-group-icon { color: #9a6300; background: #fdf3e0; }
+.suggestion-group .result-list { border-color: #eadfc6; }
+.suggestion-group .result-card { border-bottom-color: #f3e9d7; }
+.suggestion-group .result-card:hover { background: #fffdf6; }
+.suggestion-group .result-icon { color: #9a6300; background: #fdf3e0; }
+.suggestion-group .result-open { color: #8a6100; }
+.suggestion-chips { padding: 15px 14px; border: 1px solid #eadfc6; border-top: 0; border-radius: 0 0 8px 8px; display: flex; flex-wrap: wrap; gap: 8px; }
+.suggestion-chip { min-height: 38px; padding: 0 13px; border: 1px solid #eadfc6; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; color: #8a6100; background: #fffdf6; font-size: 12px; font-weight: 700; transition: border-color .16s ease, background .16s ease, transform .16s ease; }
+.suggestion-chip:hover { border-color: #d5ab55; background: #fdf3e0; transform: translateY(-1px); }
+.suggestion-chip:focus-visible { outline: 2px solid #9a6300; outline-offset: 2px; }
 .independent-check-heading { max-width: 760px; margin: 36px 0 18px; }
 .independent-check-heading h1 { margin: 4px 0 7px; font-size: 32px; }
 .independent-check-heading p { margin: 0; color: var(--ink-soft); font-size: 13px; }

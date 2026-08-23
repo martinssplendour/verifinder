@@ -17,6 +17,7 @@ export interface StudyProviderSearchResponse {
   results: StudyProviderSearchResult[];
   total: number;
   message: string | null;
+  suggestions: StudyProviderSearchResult[];
 }
 
 export interface StudyProviderDetail extends StudyProviderSearchResult {

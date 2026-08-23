@@ -18,6 +18,7 @@ from app.services.area_sources import (
 from app.services.dataset_utils import normalise_postcode
 from app.services.grid_reference import osgb36_to_wgs84
 from app.services.postcode_loader import SOURCE_ID
+from app.services.search_suggestions import CANDIDATE_LIMIT, SUGGESTION_LIMIT, rank_near_matches
 
 
 def latest_postcode_context(session: Session) -> tuple[DataSource, DatasetVersion] | None:
@@ -70,6 +71,43 @@ def find_postcode(session: Session, postcode: str) -> PostcodePoint | None:
         admin_ward_code=record.admin_ward_code,
         source=_attribution(source, version),
     )
+
+
+def suggest_postcodes(session: Session, postcode: str, limit: int = SUGGESTION_LIMIT) -> list[str]:
+    """Real postcodes close to one the snapshot does not hold.
+
+    Anchored on the outward code so the offer stays in the area the user asked
+    about rather than drifting to a similar-looking postcode elsewhere.
+    """
+    context = latest_postcode_context(session)
+    normalised = normalise_postcode(postcode)
+    if context is None or not normalised:
+        return []
+    _, version = context
+    # Normalised postcodes are stored compactly, so the outward code is
+    # everything before the three-character inward code.
+    outward = normalised[:-3]
+    if not outward:
+        return []
+    records = list(
+        session.scalars(
+            select(PostcodeRecord)
+            .where(
+                PostcodeRecord.dataset_version_id == version.id,
+                PostcodeRecord.normalised_postcode >= outward,
+                PostcodeRecord.normalised_postcode < f"{outward}￿",
+            )
+            .limit(CANDIDATE_LIMIT)
+        )
+    )
+    ranked = rank_near_matches(
+        records,
+        normalised.lower(),
+        lambda record: record.normalised_postcode,
+        limit,
+        floor=0.0,
+    )
+    return [record.postcode for record in ranked]
 
 
 async def get_area_check(

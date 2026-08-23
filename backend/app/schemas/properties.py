@@ -35,6 +35,7 @@ class PropertySearchResponse(BaseModel):
     total: int
     dataset_version: str | None = None
     message: str | None = None
+    suggestions: list[PropertySearchResult] = Field(default_factory=list)
 
 
 class NearbySalesSummary(BaseModel):

@@ -14,8 +14,29 @@ import {
   SearchX,
 } from "lucide-react";
 import { DatasetSearchForm } from "@/components/DatasetSearchForm";
+import { NoRecordsFound } from "@/components/NoRecordsFound";
 import { searchStudyProviders } from "@/services/api";
 import type { StudyProviderSearchResponse, StudyProviderSearchResult } from "@/types";
+
+function StudyCard({ result }: { result: StudyProviderSearchResult }) {
+  const isStudentSponsor = result.record_type === "student_sponsor";
+  const Icon = isStudentSponsor ? GraduationCap : Landmark;
+  const iconClass = isStudentSponsor ? "study-sponsor-icon" : "study-ofs-icon";
+  return (
+    <Link href={`/study/${result.record_type}/${result.id}`} className="result-card study-result-card">
+      <span className={`result-icon ${iconClass}`}><Icon size={23} /></span>
+      <div className="result-title">
+        <h2>{result.name}</h2>
+        <p>{result.ukprn ? `UKPRN ${result.ukprn}` : result.routes.join(" · ") || result.provider_type || "Official register record"}</p>
+      </div>
+      <div className="result-meta">
+        <span className="dot-status is-active"><BadgeCheck size={13} /> {result.status || "Listed"}</span>
+        <span>{[result.provider_type, result.town_city].filter(Boolean).join(" · ") || "Location not stated"}</span>
+      </div>
+      <span className="result-open">View record <ArrowRight size={16} /></span>
+    </Link>
+  );
+}
 
 function ResultGroup({
   heading,
@@ -40,24 +61,7 @@ function ResultGroup({
         <span>{results.length} found</span>
       </div>
       <div className="result-list">
-        {results.map((result) => (
-          <Link
-            href={`/study/${result.record_type}/${result.id}`}
-            className="result-card study-result-card"
-            key={`${result.record_type}-${result.id}`}
-          >
-            <span className={`result-icon ${kind === "student_sponsor" ? "study-sponsor-icon" : "study-ofs-icon"}`}><Icon size={23} /></span>
-            <div className="result-title">
-              <h2>{result.name}</h2>
-              <p>{result.ukprn ? `UKPRN ${result.ukprn}` : result.routes.join(" · ") || result.provider_type || "Official register record"}</p>
-            </div>
-            <div className="result-meta">
-              <span className="dot-status is-active"><BadgeCheck size={13} /> {result.status || "Listed"}</span>
-              <span>{[result.provider_type, result.town_city].filter(Boolean).join(" · ") || "Location not stated"}</span>
-            </div>
-            <span className="result-open">View record <ArrowRight size={16} /></span>
-          </Link>
-        ))}
+        {results.map((result) => <StudyCard result={result} key={`${result.record_type}-${result.id}`} />)}
       </div>
     </section>
   );
@@ -114,7 +118,9 @@ function StudyResults() {
       ) : !current ? (
         <div className="loading-state"><LoaderCircle size={22} /> Searching both official registers…</div>
       ) : current.results.length === 0 ? (
-        <div className="empty-state"><SearchX size={28} /><h2>No matching provider found</h2><p>Try the exact legal or trading name. No match is not proof that a provider is illegitimate.</p></div>
+        <NoRecordsFound query={query} hint="Try the exact legal or trading name. No match is not proof that a provider is illegitimate.">
+          {current.suggestions.map((result) => <StudyCard result={result} key={`${result.record_type}-${result.id}`} />)}
+        </NoRecordsFound>
       ) : (
         <>
           <ResultGroup heading="Student sponsor register" description="UK Visas and Immigration · licensed student sponsors" results={studentResults} kind="student_sponsor" />

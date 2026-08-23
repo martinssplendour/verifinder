@@ -5,9 +5,12 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ArrowUpRight, BarChart3, CircleAlert, Landmark, LoaderCircle, MapPin, SearchX, ShieldAlert, Waves } from "lucide-react";
 import { DatasetSearchForm } from "@/components/DatasetSearchForm";
+import { NoRecordsFound } from "@/components/NoRecordsFound";
 import { WatchButton } from "@/components/WatchButton";
-import { checkArea } from "@/services/api";
+import { ApiError, checkArea } from "@/services/api";
 import type { AreaCheckResponse } from "@/types";
+
+type AreaError = { message: string; suggestions: string[] };
 
 function monthLabel(value: string | null) {
   if (!value) return "Unavailable";
@@ -21,14 +24,18 @@ function label(value: string) {
 function AreaResults() {
   const query = useSearchParams().get("q")?.trim() || "";
   const [data, setData] = useState<AreaCheckResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AreaError | null>(null);
 
   useEffect(() => {
     queueMicrotask(() => setError(null));
     if (query.length < 5) return;
     const controller = new AbortController();
     checkArea(query, controller.signal).then(setData).catch((requestError) => {
-      if (requestError.name !== "AbortError") setError(requestError.message);
+      if (requestError.name === "AbortError") return;
+      setError({
+        message: requestError.message,
+        suggestions: requestError instanceof ApiError ? requestError.suggestions : [],
+      });
     });
     return () => controller.abort();
   }, [query]);
@@ -46,8 +53,22 @@ function AreaResults() {
 
       {!query || query.length < 5 ? (
         <div className="empty-state"><SearchX size={28} /><h2>Enter a full postcode</h2><p>Area Check needs a complete Great Britain postcode to anchor the official data lookups.</p></div>
+      ) : error && error.suggestions.length > 0 ? (
+        <NoRecordsFound
+          query={query}
+          hint={error.message}
+          suggestionsLabel="Nearby postcodes on the register"
+          suggestionsNote="Real postcodes in the same outward area. Pick the one you meant to check."
+          suggestionsClassName="suggestion-chips"
+        >
+          {error.suggestions.map((postcode) => (
+            <Link className="suggestion-chip" href={`/areas?q=${encodeURIComponent(postcode)}`} key={postcode}>
+              <MapPin size={14} /> {postcode}
+            </Link>
+          ))}
+        </NoRecordsFound>
       ) : error ? (
-        <div className="empty-state error-state" role="alert"><CircleAlert size={28} /><h2>We could not check that area</h2><p>{error}</p></div>
+        <div className="empty-state error-state" role="alert"><CircleAlert size={28} /><h2>We could not check that area</h2><p>{error.message}</p></div>
       ) : !current ? (
         <div className="loading-state"><LoaderCircle size={22} /> Checking official area sources…</div>
       ) : (

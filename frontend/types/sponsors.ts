@@ -16,4 +16,5 @@ export interface SponsorSearchResponse {
   total: number;
   dataset_version: string | null;
   message: string | null;
+  suggestions: SponsorRecordView[];
 }

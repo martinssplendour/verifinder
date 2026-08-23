@@ -5,8 +5,9 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ArrowRight, CalendarDays, CircleAlert, LoaderCircle, MapPin, SearchX, ShieldCheck, Utensils } from "lucide-react";
 import { DatasetSearchForm } from "@/components/DatasetSearchForm";
+import { NoRecordsFound } from "@/components/NoRecordsFound";
 import { searchFood } from "@/services/api";
-import type { FoodSearchResponse } from "@/types";
+import type { FoodEstablishmentSearchResult, FoodSearchResponse } from "@/types";
 
 function ratingClass(value: string | null) {
   if (value === "5" || value?.toLowerCase().startsWith("pass")) return "rating-good";
@@ -17,6 +18,17 @@ function ratingClass(value: string | null) {
 function readableDate(value: string | null) {
   if (!value) return "Date unavailable";
   return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value));
+}
+
+function FoodCard({ result }: { result: FoodEstablishmentSearchResult }) {
+  return (
+    <Link href={`/food/${result.id}`} className="result-card food-result-card">
+      <span className={`food-rating-badge ${ratingClass(result.rating_value)}`}>{result.rating_value || "—"}</span>
+      <div className="result-title"><h2>{result.business_name}</h2><p>{result.business_type || "Food business"} · FHRS ID {result.fhrs_id}</p></div>
+      <div className="result-meta"><span><MapPin size={14} /> {[result.address, result.postcode].filter(Boolean).join(", ") || "Location unavailable"}</span><span><CalendarDays size={14} /> Rated {readableDate(result.rating_date)}</span>{result.new_rating_pending && <span className="pending-rating"><ShieldCheck size={13} /> New rating pending</span>}</div>
+      <span className="result-open">View rating <ArrowRight size={16} /></span>
+    </Link>
+  );
 }
 
 function FoodResults() {
@@ -52,19 +64,14 @@ function FoodResults() {
       ) : !current ? (
         <div className="loading-state"><LoaderCircle size={22} /> Searching Food Standards Agency records…</div>
       ) : current.results.length === 0 ? (
-        <div className="empty-state"><SearchX size={28} /><h2>No matching food establishment found</h2><p>Try the trading name, postcode or a shorter spelling. Some private-address businesses omit location details.</p></div>
+        <NoRecordsFound query={query} hint="Try the trading name, postcode or a shorter spelling. Some private-address businesses omit location details.">
+          {current.suggestions.map((result) => <FoodCard result={result} key={result.id} />)}
+        </NoRecordsFound>
       ) : (
         <section className="result-group" aria-labelledby="food-results-heading">
           <div className="result-group-heading"><div><span className="result-group-icon food-group-icon"><Utensils size={18} /></span><div><h2 id="food-results-heading">Food hygiene register</h2><p>Food Standards Agency records · {current.dataset_version}</p></div></div><span>{current.total} found</span></div>
           <div className="result-list">
-            {current.results.map((result) => (
-              <Link href={`/food/${result.id}`} className="result-card food-result-card" key={result.id}>
-                <span className={`food-rating-badge ${ratingClass(result.rating_value)}`}>{result.rating_value || "—"}</span>
-                <div className="result-title"><h2>{result.business_name}</h2><p>{result.business_type || "Food business"} · FHRS ID {result.fhrs_id}</p></div>
-                <div className="result-meta"><span><MapPin size={14} /> {[result.address, result.postcode].filter(Boolean).join(", ") || "Location unavailable"}</span><span><CalendarDays size={14} /> Rated {readableDate(result.rating_date)}</span>{result.new_rating_pending && <span className="pending-rating"><ShieldCheck size={13} /> New rating pending</span>}</div>
-                <span className="result-open">View rating <ArrowRight size={16} /></span>
-              </Link>
-            ))}
+            {current.results.map((result) => <FoodCard result={result} key={result.id} />)}
           </div>
         </section>
       )}

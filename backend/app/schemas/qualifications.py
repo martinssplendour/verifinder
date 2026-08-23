@@ -29,6 +29,7 @@ class QualificationSearchResponse(BaseModel):
     total: int
     dataset_version: str | None = None
     message: str | None = None
+    suggestions: list[QualificationSearchResult] = Field(default_factory=list)
 
 
 class QualificationRecordView(QualificationSearchResult):

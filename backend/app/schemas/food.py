@@ -28,6 +28,7 @@ class FoodSearchResponse(BaseModel):
     total: int
     dataset_version: str | None = None
     message: str | None = None
+    suggestions: list[FoodEstablishmentSearchResult] = Field(default_factory=list)
 
 
 class FoodEstablishmentView(FoodEstablishmentSearchResult):

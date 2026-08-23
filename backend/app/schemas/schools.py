@@ -53,6 +53,7 @@ class SchoolSearchResponse(BaseModel):
     total: int
     dataset_version: str | None = None
     message: str | None = None
+    suggestions: list[SchoolSearchResult] = Field(default_factory=list)
 
 
 class SchoolDetail(BaseModel):

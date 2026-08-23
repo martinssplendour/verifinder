@@ -10,6 +10,12 @@ from app.models import QualificationRecord
 from app.schemas import QualificationSearchResult, SourceAttribution
 from app.services.dataset_utils import normalise_identifier
 from app.services.normalization import normalise_name
+from app.services.search_suggestions import (
+    CANDIDATE_LIMIT,
+    SUGGESTION_LIMIT,
+    candidate_filter,
+    rank_near_matches,
+)
 
 from .shared import QualificationContext, _source
 
@@ -113,5 +119,35 @@ def _search_ofqual(
         return SequenceMatcher(None, name_query, record.normalised_title).ratio()
 
     ranked = sorted(candidates, key=lambda record: (-score(record), record.title.lower()))[:limit]
+    source = _source(context)
+    return [_ofqual_view(record, source) for record in ranked]
+
+
+def _similar_ofqual(
+    session: Session, context: QualificationContext, query: str, limit: int
+) -> list[QualificationSearchResult]:
+    """Close Ofqual titles or numbers to offer when the register matched nothing."""
+    _, version = context
+    name_query = normalise_name(query)
+    number_query = normalise_identifier(query)
+    by_number = " " not in query.strip() and any(character.isdigit() for character in query)
+    column = QualificationRecord.normalised_number if by_number else QualificationRecord.normalised_title
+    target = number_query if by_number else name_query
+    condition = candidate_filter(column, target)
+    if condition is None:
+        return []
+    candidates = list(
+        session.scalars(
+            select(QualificationRecord)
+            .where(QualificationRecord.dataset_version_id == version.id, condition)
+            .limit(CANDIDATE_LIMIT)
+        )
+    )
+    key = (
+        (lambda record: record.normalised_number)
+        if by_number
+        else (lambda record: record.normalised_title)
+    )
+    ranked = rank_near_matches(candidates, target, key, limit)
     source = _source(context)
     return [_ofqual_view(record, source) for record in ranked]

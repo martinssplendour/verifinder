@@ -31,4 +31,5 @@ export interface SearchResponse {
   total: number;
   data_mode: DataMode;
   message: string | null;
+  suggestions: SearchResult[];
 }

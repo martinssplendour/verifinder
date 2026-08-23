@@ -24,6 +24,7 @@ class StudyProviderSearchResponse(BaseModel):
     results: list[StudyProviderSearchResult]
     total: int
     message: str | None = None
+    suggestions: list[StudyProviderSearchResult] = Field(default_factory=list)
 
 
 class StudyProviderDetail(BaseModel):

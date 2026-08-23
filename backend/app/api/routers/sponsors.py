@@ -3,7 +3,12 @@ from sqlalchemy.orm import Session
 
 from app.database import get_read_db
 from app.schemas import SponsorRecordView, SponsorSearchResponse
-from app.services.sponsor_lookup import get_sponsor_record, search_sponsor_records, suggest_sponsor_records
+from app.services.sponsor_lookup import (
+    get_sponsor_record,
+    search_sponsor_records,
+    similar_sponsor_records,
+    suggest_sponsor_records,
+)
 
 
 router = APIRouter()
@@ -16,12 +21,14 @@ async def sponsor_search(
     session: Session = Depends(get_read_db),
 ):
     results, context = search_sponsor_records(session, q, limit)
+    suggestions = [] if results or context is None else similar_sponsor_records(session, q)[0]
     return SponsorSearchResponse(
         query=q,
         results=results,
         total=len(results),
         dataset_version=context.version.version_identifier if context else None,
         message=None if context else "The sponsor register has not been imported.",
+        suggestions=suggestions,
     )
 
 

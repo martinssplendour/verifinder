@@ -9,6 +9,12 @@ from app.models import QualificationExpansionRecord
 from app.schemas import QualificationSearchResult, SourceAttribution
 from app.services.dataset_utils import normalise_identifier
 from app.services.normalization import normalise_name
+from app.services.search_suggestions import (
+    CANDIDATE_LIMIT,
+    SUGGESTION_LIMIT,
+    candidate_filter,
+    rank_near_matches,
+)
 
 from .shared import QualificationContext, _source
 
@@ -110,5 +116,39 @@ def _search_qiw(
         return SequenceMatcher(None, name_query, record.normalised_title).ratio()
 
     ranked = sorted(candidates, key=lambda record: (-score(record), record.title.lower()))[:limit]
+    source = _source(context)
+    return [_qiw_view(record, source) for record in ranked]
+
+
+def _similar_qiw(
+    session: Session, context: QualificationContext, query: str, limit: int
+) -> list[QualificationSearchResult]:
+    """Close Qualifications Wales titles or numbers to offer when nothing matched."""
+    _, version = context
+    name_query = normalise_name(query)
+    number_query = normalise_identifier(query)
+    by_number = " " not in query.strip() and any(character.isdigit() for character in query)
+    column = (
+        QualificationExpansionRecord.normalised_number
+        if by_number
+        else QualificationExpansionRecord.normalised_title
+    )
+    target = number_query if by_number else name_query
+    condition = candidate_filter(column, target)
+    if condition is None:
+        return []
+    candidates = list(
+        session.scalars(
+            select(QualificationExpansionRecord)
+            .where(QualificationExpansionRecord.dataset_version_id == version.id, condition)
+            .limit(CANDIDATE_LIMIT)
+        )
+    )
+    key = (
+        (lambda record: record.normalised_number)
+        if by_number
+        else (lambda record: record.normalised_title)
+    )
+    ranked = rank_near_matches(candidates, target, key, limit)
     source = _source(context)
     return [_qiw_view(record, source) for record in ranked]

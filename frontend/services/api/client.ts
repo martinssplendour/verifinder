@@ -9,6 +9,7 @@ export class ApiError extends Error {
   paymentRequired = false;
   coinBalance = 0;
   resetAt?: string;
+  suggestions: string[] = [];
 
   constructor(message: string, detail?: Record<string, unknown>) {
     super(message);
@@ -19,6 +20,9 @@ export class ApiError extends Error {
     this.paymentRequired = detail?.payment_required === true;
     this.coinBalance = typeof detail?.coin_balance === "number" ? detail.coin_balance : 0;
     this.resetAt = typeof detail?.reset_at === "string" ? detail.reset_at : undefined;
+    this.suggestions = Array.isArray(detail?.suggestions)
+      ? detail.suggestions.filter((item): item is string => typeof item === "string")
+      : [];
   }
 }
 

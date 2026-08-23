@@ -11,9 +11,10 @@ from app.models import (
 )
 from app.schemas import QualificationRecordView, QualificationSearchResult, QualificationUnitView
 from app.services.dataset_utils import normalise_identifier
+from app.services.search_suggestions import SUGGESTION_LIMIT
 
-from .ofqual import _ofqual_view, _search_ofqual
-from .qiw import _qiw_view, _search_qiw
+from .ofqual import _ofqual_view, _search_ofqual, _similar_ofqual
+from .qiw import _qiw_view, _search_qiw, _similar_qiw
 from .shared import (
     QualificationContext,
     _source,
@@ -27,6 +28,7 @@ __all__ = [
     "latest_welsh_qualification_context",
     "latest_qualification_unit_context",
     "search_qualifications",
+    "similar_qualifications",
     "get_qualification",
 ]
 
@@ -42,6 +44,20 @@ def search_qualifications(
     if qiw_context:
         results.extend(_search_qiw(session, qiw_context, query, limit))
     return results, ofqual_context or qiw_context
+
+
+def similar_qualifications(
+    session: Session, query: str, limit: int = SUGGESTION_LIMIT
+) -> list[QualificationSearchResult]:
+    """Close qualifications to offer when neither register matched the search."""
+    results: list[QualificationSearchResult] = []
+    ofqual_context = latest_qualification_context(session)
+    if ofqual_context:
+        results.extend(_similar_ofqual(session, ofqual_context, query, limit))
+    qiw_context = latest_welsh_qualification_context(session)
+    if qiw_context:
+        results.extend(_similar_qiw(session, qiw_context, query, limit))
+    return results[: limit * 2]
 
 
 def _unit_details(session: Session, qualification_number: str) -> tuple[int, list[QualificationUnitView]]:

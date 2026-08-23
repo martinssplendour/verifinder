@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 VerificationStatus = Literal["verified", "data_unavailable", "stale", "unknown"]
@@ -36,6 +36,7 @@ class SearchResponse(BaseModel):
     total: int
     data_mode: DataMode
     message: str | None = None
+    suggestions: list[SearchResult] = Field(default_factory=list)
 
 
 class ChangeItem(BaseModel):

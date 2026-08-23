@@ -3,7 +3,11 @@ from sqlalchemy.orm import Session
 
 from app.database import get_read_db
 from app.schemas import FoodEstablishmentView, FoodSearchResponse
-from app.services.food_lookup import get_food_establishment, search_food_establishments
+from app.services.food_lookup import (
+    get_food_establishment,
+    search_food_establishments,
+    similar_food_establishments,
+)
 
 
 router = APIRouter()
@@ -16,12 +20,14 @@ async def food_search(
     session: Session = Depends(get_read_db),
 ):
     results, context = search_food_establishments(session, q, limit)
+    suggestions = [] if results or context is None else similar_food_establishments(session, q)
     return FoodSearchResponse(
         query=q,
         results=results,
         total=len(results),
         dataset_version=context[1].version_identifier if context else None,
         message=None if context else "The Food Standards Agency ratings dataset has not been imported.",
+        suggestions=suggestions,
     )
 
 

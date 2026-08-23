@@ -21,6 +21,7 @@ export interface QualificationSearchResponse {
   total: number;
   dataset_version: string | null;
   message: string | null;
+  suggestions: QualificationSearchResult[];
 }
 
 export interface QualificationRecordView extends QualificationSearchResult {

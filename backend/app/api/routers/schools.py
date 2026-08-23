@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_read_db
 from app.schemas import SchoolDetail, SchoolSearchResponse
-from app.services.school_lookup import get_school, search_schools
+from app.services.school_lookup import get_school, search_schools, similar_schools
 
 
 router = APIRouter()
@@ -16,12 +16,14 @@ async def school_search(
     session: Session = Depends(get_read_db),
 ):
     results, context = search_schools(session, q, limit)
+    suggestions = [] if results or context is None else similar_schools(session, q)
     return SchoolSearchResponse(
         query=q,
         results=results,
         total=len(results),
         dataset_version=context[1].version_identifier if context else None,
         message=None if context else "The GIAS establishment register has not been imported.",
+        suggestions=suggestions,
     )
 
 

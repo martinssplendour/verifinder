@@ -21,6 +21,7 @@ export interface FoodSearchResponse {
   total: number;
   dataset_version: string | null;
   message: string | null;
+  suggestions: FoodEstablishmentSearchResult[];
 }
 
 export interface FoodEstablishmentView extends FoodEstablishmentSearchResult {

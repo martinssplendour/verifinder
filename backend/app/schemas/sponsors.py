@@ -21,3 +21,4 @@ class SponsorSearchResponse(BaseModel):
     total: int
     dataset_version: str | None = None
     message: str | None = None
+    suggestions: list[SponsorRecordView] = Field(default_factory=list)

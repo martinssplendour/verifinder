@@ -18,6 +18,7 @@ export interface PropertySearchResponse {
   total: number;
   dataset_version: string | null;
   message: string | null;
+  suggestions: PropertySearchResult[];
 }
 
 export interface PropertyDetail {

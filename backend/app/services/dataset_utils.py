@@ -97,3 +97,11 @@ def normalise_identifier(value: str) -> str:
 def normalise_postcode(value: str | None) -> str | None:
     cleaned = normalise_identifier(value or "")
     return cleaned.upper() or None
+
+
+POSTCODE_PATTERN = re.compile(r"^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$", re.IGNORECASE)
+
+
+def looks_like_postcode(value: str | None) -> bool:
+    """Whether a search term is shaped like a UK postcode rather than a name."""
+    return bool(POSTCODE_PATTERN.fullmatch((value or "").strip()))
