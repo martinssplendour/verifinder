@@ -37,7 +37,7 @@ export default function SponsorPage({ params }: { params: Promise<{ recordId: st
   }, [recordId]);
 
   if (error) {
-    return <div className="shell profile-error"><CircleAlert size={32} /><h1>Sponsor record unavailable</h1><p>{error}</p><Link className="button" href="/search#sponsorship-check">Back to sponsorship check</Link></div>;
+    return <div className="shell profile-error"><CircleAlert size={32} /><h1>Sponsor record unavailable</h1><p>{error}</p><Link className="button" href="/sponsors">Back to sponsorship check</Link></div>;
   }
   if (!record) {
     return <div className="loading-state page-loading"><LoaderCircle size={22} /> Loading Home Office sponsor record…</div>;
@@ -47,7 +47,7 @@ export default function SponsorPage({ params }: { params: Promise<{ recordId: st
   return (
     <div className="profile-page sponsor-page">
       <div className="shell">
-        <Link className="back-link" href={`/search?sponsor=${encodeURIComponent(record.organisation_name)}#sponsorship-check`}><ChevronLeft size={16} /> Back to sponsorship check</Link>
+        <Link className="back-link" href={`/sponsors?q=${encodeURIComponent(record.organisation_name)}`}><ChevronLeft size={16} /> Back to sponsorship check</Link>
         <header className="company-header sponsor-header">
           <span className="company-monogram sponsor-monogram" aria-hidden="true"><ShieldCheck size={30} /></span>
           <div>
@@ -75,7 +75,7 @@ export default function SponsorPage({ params }: { params: Promise<{ recordId: st
             <div className="sponsor-route-list">
               {record.routes.map((route) => <div key={route}><ShieldCheck size={16} /><span>{route}</span></div>)}
             </div>
-            <Link className="secondary-cta" href={`/search?company=${encodeURIComponent(record.organisation_name)}#company-check`}><Search size={15} /> Run a separate Companies House check</Link>
+            <Link className="secondary-cta" href={`/companies?q=${encodeURIComponent(record.organisation_name)}`}><Search size={15} /> Open Company Check</Link>
           </article>
 
           <article className="detail-panel sponsor-source-panel">

@@ -14,8 +14,8 @@ type NavItem = {
 const NAV_ITEMS: NavItem[] = [
   { label: "Ask", mobileLabel: "Ask VeriFinder", href: "/ask", mode: "ask" },
   { label: "Plan", mobileLabel: "Build a decision plan", href: "/plan", mode: "plan" },
-  { label: "Companies", href: "/search#company-check" },
-  { label: "Sponsors", href: "/search#sponsorship-check" },
+  { label: "Companies", href: "/companies" },
+  { label: "Sponsors", href: "/sponsors" },
   { label: "Areas", href: "/areas" },
   { label: "Qualifications", href: "/qualifications" },
   { label: "Food", href: "/food" },

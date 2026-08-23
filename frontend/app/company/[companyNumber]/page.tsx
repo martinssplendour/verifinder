@@ -70,7 +70,7 @@ export default function CompanyPage({ params }: { params: Promise<{ companyNumbe
   }
 
   if (error) {
-    return <div className="shell profile-error"><CircleAlert size={32} /><h1>Company unavailable</h1><p>{error}</p><Link className="button" href="/search#company-check">Back to company check</Link></div>;
+    return <div className="shell profile-error"><CircleAlert size={32} /><h1>Company unavailable</h1><p>{error}</p><Link className="button" href="/companies">Back to company check</Link></div>;
   }
   if (!profile) {
     return <div className="loading-state page-loading"><LoaderCircle size={22} /> Loading Companies House record…</div>;
@@ -81,7 +81,7 @@ export default function CompanyPage({ params }: { params: Promise<{ companyNumbe
     <div className="profile-page">
       <div className="shell">
         <div className="profile-topline">
-          <Link className="back-link" href={`/search?company=${encodeURIComponent(profile.company_name)}#company-check`}><ChevronLeft size={16} /> Back to company check</Link>
+          <Link className="back-link" href={`/companies?q=${encodeURIComponent(profile.company_name)}`}><ChevronLeft size={16} /> Back to company check</Link>
           <div className="profile-actions">
             <WatchButton entityType="company" entityId={profile.company_number} label={profile.company_name} />
             <button className="icon-button" type="button" onClick={share}><Share2 size={17} /> {copied ? "Copied" : "Share"}</button>
@@ -148,7 +148,7 @@ export default function CompanyPage({ params }: { params: Promise<{ companyNumbe
             <article className="detail-panel separate-sponsor-panel">
               <div className="panel-title"><div><span className="kicker">Separate source</span><h2>Need a sponsorship check?</h2></div><Search size={21} /></div>
               <p>Run an independent exact-name lookup against the stored Home Office worker sponsor list. No result from that list will be attached to this Companies House profile.</p>
-              <Link className="button button-secondary" href={`/search?sponsor=${encodeURIComponent(profile.company_name)}#sponsorship-check`}><Search size={16} /> Open sponsorship check</Link>
+              <Link className="button button-secondary" href={`/sponsors?q=${encodeURIComponent(profile.company_name)}`}><Search size={16} /> Open sponsorship check</Link>
             </article>
           </div>
         )}

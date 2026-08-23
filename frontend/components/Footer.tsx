@@ -11,8 +11,8 @@ export function Footer() {
         </div>
         <div>
           <strong>Product</strong>
-          <Link href="/search#company-check">Company check</Link>
-          <Link href="/search#sponsorship-check">Sponsorship check</Link>
+          <Link href="/companies">Company check</Link>
+          <Link href="/sponsors">Sponsorship check</Link>
           <Link href="/areas">Area check</Link>
           <Link href="/property">Property check</Link>
           <Link href="/qualifications">Qualification check</Link>

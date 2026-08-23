@@ -19,8 +19,8 @@ import { SearchBox } from "@/components/SearchBox";
 import { DecisionTrigger } from "@/components/DecisionDrawer";
 
 const categories = [
-  { icon: Building2, title: "Company Check", copy: "Retrieve an exact Companies House legal-company record.", href: "/search#company-check", live: true, tone: "blue" },
-  { icon: ShieldCheck, title: "Sponsorship Check", copy: "Check an exact organisation name on the stored worker sponsor list.", href: "/search#sponsorship-check", live: true, tone: "green" },
+  { icon: Building2, title: "Company Check", copy: "Search Companies House legal-company records.", href: "/companies", live: true, tone: "blue" },
+  { icon: ShieldCheck, title: "Sponsorship Check", copy: "Search the stored worker sponsor register.", href: "/sponsors", live: true, tone: "green" },
   { icon: MapPin, title: "Area Check", copy: "Recent crime, flood warnings and planning designations.", href: "/areas", live: true, tone: "teal" },
   { icon: GraduationCap, title: "Qualification Check", copy: "Check whether a qualification is officially regulated.", href: "/qualifications", live: true, tone: "purple" },
   { icon: Utensils, title: "Food Check", copy: "Food hygiene ratings and inspection history.", href: "/food", live: true, tone: "mint" },

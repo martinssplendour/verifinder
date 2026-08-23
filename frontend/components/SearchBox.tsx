@@ -18,7 +18,15 @@ interface SuggestionState {
   loading: boolean;
 }
 
-export function SearchBox({ initialValue = "" }: { initialValue?: string }) {
+type SearchMode = "all" | "company" | "sponsor";
+
+export function SearchBox({
+  initialValue = "",
+  mode = "all",
+}: {
+  initialValue?: string;
+  mode?: SearchMode;
+}) {
   const router = useRouter();
   const [query, setQuery] = useState(initialValue);
   const [focused, setFocused] = useState(false);
@@ -42,20 +50,20 @@ export function SearchBox({ initialValue = "" }: { initialValue?: string }) {
   const showSuggestions = focused && value.length >= 2;
 
   useEffect(() => {
-    if (value.length < 2) return;
+    if (!focused || value.length < 2) return;
     const controller = new AbortController();
     let active = true;
     const timer = window.setTimeout(async () => {
       setSuggestions({ query: value, companies: [], sponsors: [], loading: true });
       const [companyResult, sponsorResult] = await Promise.allSettled([
-        suggestCompanies(value, controller.signal),
-        suggestSponsors(value, controller.signal),
+        mode !== "sponsor" ? suggestCompanies(value, controller.signal) : Promise.resolve(null),
+        mode !== "company" ? suggestSponsors(value, controller.signal) : Promise.resolve(null),
       ]);
       if (!active) return;
       setSuggestions({
         query: value,
-        companies: companyResult.status === "fulfilled" ? companyResult.value.results : [],
-        sponsors: sponsorResult.status === "fulfilled" ? sponsorResult.value.results : [],
+        companies: companyResult.status === "fulfilled" && companyResult.value ? companyResult.value.results : [],
+        sponsors: sponsorResult.status === "fulfilled" && sponsorResult.value ? sponsorResult.value.results : [],
         loading: false,
       });
       setActiveIndex(-1);
@@ -65,16 +73,17 @@ export function SearchBox({ initialValue = "" }: { initialValue?: string }) {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [value]);
+  }, [focused, mode, value]);
 
-  function exactChecksUrl() {
-    return `/search?${new URLSearchParams({ company: value, sponsor: value }).toString()}`;
+  function resultsUrl() {
+    const path = mode === "company" ? "/companies" : mode === "sponsor" ? "/sponsors" : "/search";
+    return `${path}?${new URLSearchParams({ q: value }).toString()}`;
   }
 
   function submit(event: FormEvent) {
     event.preventDefault();
     if (value.length < 2) return;
-    router.push(exactChecksUrl());
+    router.push(resultsUrl());
   }
 
   function openSuggestion(item: Suggestion) {
@@ -144,13 +153,25 @@ export function SearchBox({ initialValue = "" }: { initialValue?: string }) {
     );
   }
 
+  const inputId = `${mode}-source-search`;
+  const label = mode === "company"
+    ? "Search Companies House"
+    : mode === "sponsor"
+      ? "Search the sponsor register"
+      : "Search company and sponsor records";
+  const placeholder = mode === "company"
+    ? "Start typing a company name or number..."
+    : mode === "sponsor"
+      ? "Start typing a sponsor organisation..."
+      : "Start typing a company or sponsor name...";
+
   return (
     <div className="search-combobox global-exact-search">
       <form className="search-form" onSubmit={submit} role="search">
         <Search className="search-leading" size={21} aria-hidden="true" />
-        <label className="sr-only" htmlFor="global-company-search">Company or sponsor source record</label>
+        <label className="sr-only" htmlFor={inputId}>{label}</label>
         <input
-          id="global-company-search"
+          id={inputId}
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);
@@ -159,7 +180,7 @@ export function SearchBox({ initialValue = "" }: { initialValue?: string }) {
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           onKeyDown={handleKeyDown}
-          placeholder="Start typing a company or sponsor name..."
+          placeholder={placeholder}
           autoComplete="off"
           role="combobox"
           aria-autocomplete="list"
@@ -168,13 +189,10 @@ export function SearchBox({ initialValue = "" }: { initialValue?: string }) {
           aria-activedescendant={activeIndex >= 0 ? `source-suggestion-${activeIndex}` : undefined}
         />
         {suggestions.loading && current ? <LoaderCircle className="search-spinner" size={18} aria-label="Loading source suggestions" /> : null}
-        <button type="submit" aria-label="Open the separate exact checks"><Search size={20} /></button>
+        <button type="submit" aria-label="Submit search"><Search size={20} /></button>
       </form>
       {showSuggestions ? (
         <div className="suggestions" id="source-suggestions" role="listbox" aria-label="Source record suggestions">
-          <div className="suggestion-source-note">
-            Suggestions help you choose a source record. They do not join or verify records across sources.
-          </div>
           {current && suggestions.companies.length > 0 ? (
             <>
               <div className="suggestions-heading"><span>Companies House suggestions</span><span>Company source</span></div>
@@ -188,19 +206,18 @@ export function SearchBox({ initialValue = "" }: { initialValue?: string }) {
             </>
           ) : null}
           {current && !suggestions.loading && items.length === 0 ? (
-            <p className="suggestion-message">No source records contain that typed text. You can still run the separate exact checks.</p>
+            <p className="suggestion-message">No suggestions found. Press search to check the full name.</p>
           ) : null}
           <button
             className="view-results"
             type="button"
             onMouseDown={(event) => event.preventDefault()}
-            onClick={() => value.length >= 2 && router.push(exactChecksUrl())}
+            onClick={() => value.length >= 2 && router.push(resultsUrl())}
           >
-            Run two separate exact checks <ArrowRight size={14} />
+            View search results <ArrowRight size={14} />
           </button>
         </div>
       ) : null}
-      <p className="global-search-helper">Choose a source record, or run the same exact text through two independent checks. Each name can be changed on the results page.</p>
     </div>
   );
 }
