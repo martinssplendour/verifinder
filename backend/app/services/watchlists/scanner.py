@@ -23,7 +23,6 @@ from app.services.gias_loader import SOURCE_ID as GIAS_SOURCE_ID
 from app.services.notifications import dispatch_alert_email
 from app.services.area_lookup import get_area_check
 from app.services.companies_house import CompaniesHouseClient, CompaniesHouseError
-from app.services.dataset_utils import normalise_postcode
 from app.services.property_loader import SOURCE_ID as PROPERTY_SOURCE_ID
 from app.services.qualification_loader import SOURCE_ID as OFQUAL_SOURCE_ID
 
@@ -33,63 +32,6 @@ VERSIONED_DIFF_SPECS: dict[str, tuple[type, str, str, list[str]]] = {
     "food": (FoodEstablishmentRecord, "fhrs_id", FOOD_SOURCE_ID, ["rating_value", "rating_date"]),
     "qualification": (QualificationRecord, "qualification_number", OFQUAL_SOURCE_ID, ["status", "level"]),
 }
-
-
-def add_watchlist_entry(session: Session, subject_id: str, entity_type: str, entity_id: str, label: str | None = None) -> WatchlistEntry:
-    if entity_type == "area":
-        entity_id = normalise_postcode(entity_id)
-        if not entity_id:
-            raise ValueError("A complete Great Britain postcode is required for an area watch.")
-    existing = session.scalar(
-        select(WatchlistEntry).where(
-            WatchlistEntry.subject_id == subject_id,
-            WatchlistEntry.entity_type == entity_type,
-            WatchlistEntry.entity_id == entity_id,
-        )
-    )
-    if existing:
-        return existing
-    entry = WatchlistEntry(subject_id=subject_id, entity_type=entity_type, entity_id=entity_id, label=label)
-    session.add(entry)
-    session.commit()
-    return entry
-
-
-def set_watchlist_notifications(session: Session, subject_id: str, entry_id: int, enabled: bool) -> WatchlistEntry | None:
-    entry = session.get(WatchlistEntry, entry_id)
-    if entry is None or entry.subject_id != subject_id:
-        return None
-    entry.notifications_enabled = enabled
-    session.commit()
-    return entry
-
-
-def remove_watchlist_entry(session: Session, subject_id: str, entry_id: int) -> bool:
-    entry = session.get(WatchlistEntry, entry_id)
-    if entry is None or entry.subject_id != subject_id:
-        return False
-    session.delete(entry)
-    session.commit()
-    return True
-
-
-def list_watchlist(session: Session, subject_id: str) -> list[WatchlistEntry]:
-    return list(
-        session.scalars(
-            select(WatchlistEntry).where(WatchlistEntry.subject_id == subject_id).order_by(WatchlistEntry.created_at.desc())
-        )
-    )
-
-
-def list_alerts(session: Session, subject_id: str, limit: int = 50) -> list[WatchlistAlert]:
-    return list(
-        session.scalars(
-            select(WatchlistAlert)
-            .where(WatchlistAlert.subject_id == subject_id)
-            .order_by(WatchlistAlert.created_at.desc())
-            .limit(limit)
-        )
-    )
 
 
 def _latest_and_previous_versions(public_session: Session, source_id: str) -> tuple[DatasetVersion, DatasetVersion] | None:

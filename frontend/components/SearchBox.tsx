@@ -3,7 +3,7 @@
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Building2, CircleAlert, LoaderCircle, Search, ShieldCheck } from "lucide-react";
-import { searchCompanies, searchSponsors } from "@/services/api";
+import { useCompanySponsorSuggestions } from "@/hooks/useCompanySponsorSuggestions";
 import type { SearchResult, SponsorRecordView } from "@/types";
 
 type Suggestion =
@@ -13,12 +13,8 @@ type Suggestion =
 export function SearchBox({ initialValue = "" }: { initialValue?: string }) {
   const router = useRouter();
   const [query, setQuery] = useState(initialValue);
-  const [companies, setCompanies] = useState<SearchResult[]>([]);
-  const [sponsors, setSponsors] = useState<SponsorRecordView[]>([]);
-  const [companyUnavailable, setCompanyUnavailable] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const { companies, sponsors, companyUnavailable, loading, error } = useCompanySponsorSuggestions(query);
   const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(-1);
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasFocus = useRef(false);
@@ -38,37 +34,9 @@ export function SearchBox({ initialValue = "" }: { initialValue?: string }) {
   ];
 
   useEffect(() => {
-    if (query.trim().length < 2) return;
-    const controller = new AbortController();
-    const timer = setTimeout(async () => {
-      setLoading(true);
-      setError(null);
-      const [companyResult, sponsorResult] = await Promise.allSettled([
-        searchCompanies(query.trim(), controller.signal),
-        searchSponsors(query.trim(), controller.signal),
-      ]);
-      if (controller.signal.aborted) return;
-      if (companyResult.status === "fulfilled") {
-        setCompanies(companyResult.value.results);
-        setCompanyUnavailable(companyResult.value.data_mode === "unavailable");
-      } else {
-        setCompanies([]);
-        setCompanyUnavailable(false);
-      }
-      if (sponsorResult.status === "fulfilled") setSponsors(sponsorResult.value.results);
-      else setSponsors([]);
-      if (companyResult.status === "rejected" && sponsorResult.status === "rejected") {
-        setError("Search is temporarily unavailable. You can try again shortly.");
-      }
-      setOpen(hasFocus.current);
-      setActiveIndex(-1);
-      setLoading(false);
-    }, 280);
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [query]);
+    setOpen(hasFocus.current);
+    setActiveIndex(-1);
+  }, [companies, sponsors]);
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -139,11 +107,7 @@ export function SearchBox({ initialValue = "" }: { initialValue?: string }) {
             const value = event.target.value;
             setQuery(value);
             if (value.trim().length < 2) {
-              setCompanies([]);
-              setSponsors([]);
-              setCompanyUnavailable(false);
               setOpen(false);
-              setError(null);
             }
           }}
           onFocus={() => {

@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "check": "tsc --noEmit",
-    "lint": "eslint app components services types tests playwright.config.ts --max-warnings=0",
+    "lint": "eslint app components hooks services types tests playwright.config.ts --max-warnings=0",
     "test:e2e": "playwright test"
   },
   "dependencies": {

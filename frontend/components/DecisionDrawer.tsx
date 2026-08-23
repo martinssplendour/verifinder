@@ -10,7 +10,6 @@ import {
   useRef,
   useState,
 } from "react";
-import Link from "next/link";
 import {
   ArrowRight,
   BadgeCheck,
@@ -19,7 +18,6 @@ import {
   CircleAlert,
   Database,
   Download,
-  FileText,
   LoaderCircle,
   MessageSquareText,
   RefreshCw,
@@ -28,19 +26,15 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { ApiError, askVeriFinder, createDecisionPlan, savePlanReport } from "@/services/api";
-import { downloadSignedReport } from "@/services/report";
-import type { AskResponse, DecisionPlanResponse, PlanRequest } from "@/types";
 import { useAccount } from "@/components/Account";
+import { AskAnswer } from "@/components/decision-drawer/AskAnswer";
+import { PlanReport } from "@/components/decision-drawer/PlanReport";
+import { useAskConversation } from "@/components/decision-drawer/useAskConversation";
+import { usePlanConversation } from "@/components/decision-drawer/usePlanConversation";
 
 type DrawerMode = "ask" | "plan";
-type PlanStage = "goal" | "location" | "budget" | "priorities" | "date" | "report";
-type ChatMessage = { id: number; role: "assistant" | "user"; text: string; ask?: AskResponse };
-type PlanDraft = { goal: string; location: string; budget?: number; priorities: string[]; moving_date?: string };
 
 const PRIORITIES = ["Housing cost", "Work sponsorship", "Study", "Schools", "Crime", "Planning", "Flood risk"];
-const INITIAL_ASK: ChatMessage[] = [{ id: 1, role: "assistant", text: "What would you like me to check? I can query sponsorship, qualifications, study providers, food hygiene, recent property sales and exact-postcode area evidence." }];
-const INITIAL_PLAN: ChatMessage[] = [{ id: 1, role: "assistant", text: "What decision are you planning? Describe the outcome you want in your own words." }];
 
 const DecisionDrawerContext = createContext<{ openDrawer: (mode: DrawerMode) => void } | null>(null);
 
@@ -49,55 +43,18 @@ export function DecisionTrigger({ mode, className, children }: { mode: DrawerMod
   return <button type="button" className={className} onClick={() => context?.openDrawer(mode)} aria-haspopup="dialog">{children}</button>;
 }
 
-function AskAnswer({ answer, close }: { answer: AskResponse; close: () => void }) {
-  return (
-    <div className="drawer-answer">
-      <div className="drawer-answer-head"><div><span>{answer.ai_mode === "gemini" ? "Gemini-interpreted query" : "Evidence-rule query"}</span><strong>{answer.headline}</strong></div><BadgeCheck size={18} /></div>
-      <div className="drawer-query-chips">
-        <span>{answer.interpretation.intent.replaceAll("_", " ")}</span>
-        {answer.interpretation.location && <span>{answer.interpretation.location}</span>}
-        {answer.interpretation.industry && <span>{answer.interpretation.industry}</span>}
-        {answer.interpretation.subject && <span>{answer.interpretation.subject}</span>}
-      </div>
-      {answer.results.length ? <div className="drawer-result-list">{answer.results.map((result) => (
-        <Link href={result.href} onClick={close} key={`${result.result_type}-${result.id}`}>
-          <span>{result.rank}</span><div><strong>{result.title}</strong><small>{result.subtitle || result.result_type.replaceAll("_", " ")}</small><em><Database size={11} />{result.source.organisation}</em></div><ArrowRight size={15} />
-        </Link>
-      ))}</div> : <div className="drawer-no-results"><CircleAlert size={17} /><span>No records matched those interpreted filters.</span></div>}
-      <div className="drawer-boundary"><strong>Boundary</strong>{answer.limitations.map((item) => <p key={item}>{item}</p>)}</div>
-    </div>
-  );
-}
-
-function PlanReport({ plan }: { plan: DecisionPlanResponse }) {
-  return (
-    <div className="drawer-report">
-      <div className="drawer-report-title"><span><FileText size={17} /></span><div><small>Generated decision report</small><strong>{plan.title}</strong></div></div>
-      <p className="drawer-report-summary">{plan.summary}</p>
-      {plan.questions.length > 0 && <div className="drawer-report-section"><h4>Open questions</h4>{plan.questions.map((item) => <div className="drawer-report-question" key={item.id}><CircleAlert size={13} /><span><strong>{item.question}</strong><small>{item.why_it_matters}</small></span></div>)}</div>}
-      <div className="drawer-report-section"><h4>Starting scenarios</h4>{plan.scenarios.length ? plan.scenarios.map((scenario) => <article className="drawer-scenario" key={scenario.id}><div><span>{scenario.location}</span><strong>{scenario.title}</strong></div><dl>{scenario.metrics.map((metric) => <div key={metric.label}><dt>{metric.label}</dt><dd>{metric.value}</dd></div>)}</dl></article>) : <p>No location scenarios were available.</p>}</div>
-      <div className="drawer-report-section"><h4>Evidence ledger</h4><div className="drawer-evidence-summary">{(["verified_fact", "calculated_finding", "inference", "unknown"] as const).map((kind) => <div key={kind}><strong>{plan.evidence.filter((item) => item.kind === kind).length}</strong><span>{kind.replaceAll("_", " ")}</span></div>)}</div></div>
-      <div className="drawer-report-section"><h4>Action path</h4><ol className="drawer-action-path">{plan.steps.map((step) => <li key={step.position}><span>{step.position}</span><div><strong>{step.title}</strong><small>{step.description}</small></div></li>)}</ol></div>
-    </div>
-  );
-}
-
 export function DecisionDrawerProvider({ children }: { children: ReactNode }) {
   const { account, openAccount, refreshAccount } = useAccount();
   const [mode, setMode] = useState<DrawerMode | null>(null);
-  const [askMessages, setAskMessages] = useState<ChatMessage[]>(INITIAL_ASK);
-  const [planMessages, setPlanMessages] = useState<ChatMessage[]>(INITIAL_PLAN);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [reportLoading, setReportLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [upgradePrompt, setUpgradePrompt] = useState(false);
-  const [planStage, setPlanStage] = useState<PlanStage>("goal");
-  const [planDraft, setPlanDraft] = useState<PlanDraft>({ goal: "", location: "", priorities: [] });
-  const [planReport, setPlanReport] = useState<DecisionPlanResponse | null>(null);
-  const nextId = useRef(10);
   const closeButton = useRef<HTMLButtonElement | null>(null);
   const conversationEnd = useRef<HTMLDivElement | null>(null);
+
+  const ask = useAskConversation({ setLoading, setError, setUpgradePrompt });
+  const plan = usePlanConversation({ setLoading, setError, setUpgradePrompt, setInput, refreshAccount });
 
   const close = useCallback(() => setMode(null), []);
   const openDrawer = useCallback((nextMode: DrawerMode) => {
@@ -119,40 +76,14 @@ export function DecisionDrawerProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     conversationEnd.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [askMessages, planMessages, loading, planReport]);
-
-  function message(role: "assistant" | "user", text: string, ask?: AskResponse): ChatMessage {
-    return { id: nextId.current++, role, text, ask };
-  }
+  }, [ask.messages, plan.messages, loading, plan.report]);
 
   async function submitAsk(event: FormEvent) {
     event.preventDefault();
     const question = input.trim();
     if (question.length < 3 || loading) return;
     setInput("");
-    setError(null);
-    setUpgradePrompt(false);
-    setAskMessages((current) => [...current, message("user", question)]);
-    setLoading(true);
-    try {
-      const answer = await askVeriFinder(question);
-      setAskMessages((current) => [...current, message("assistant", answer.summary, answer)]);
-    } catch (requestError) {
-      setError((requestError as Error).message);
-      setUpgradePrompt(requestError instanceof ApiError && (requestError.upgradeRequired || requestError.signInRequired));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function resetPlan() {
-    setPlanMessages(INITIAL_PLAN);
-    setPlanDraft({ goal: "", location: "", priorities: [] });
-    setPlanStage("goal");
-    setPlanReport(null);
-    setError(null);
-    setUpgradePrompt(false);
-    setInput("");
+    await ask.submit(question);
   }
 
   function submitPlanText(event: FormEvent) {
@@ -161,81 +92,11 @@ export function DecisionDrawerProvider({ children }: { children: ReactNode }) {
     if (!value || loading) return;
     setError(null);
     setUpgradePrompt(false);
-    if (planStage === "goal") {
-      if (value.length < 5) { setError("Please describe the decision in a little more detail."); return; }
-      setPlanDraft((current) => ({ ...current, goal: value }));
-      setPlanMessages((current) => [...current, message("user", value), message("assistant", "Which town, city, area, or full postcode should the plan cover?")]);
-      setPlanStage("location");
-    } else if (planStage === "location") {
-      setPlanDraft((current) => ({ ...current, location: value }));
-      setPlanMessages((current) => [...current, message("user", value), message("assistant", "What is your purchase budget? Enter an amount without commas, or type “skip”.")]);
-      setPlanStage("budget");
-    } else if (planStage === "budget") {
-      const skipped = value.toLowerCase() === "skip";
-      const amount = Number(value.replace(/[£,$\s]/g, ""));
-      if (!skipped && (!Number.isFinite(amount) || amount <= 0)) { setError("Enter a positive amount, or type “skip”."); return; }
-      setPlanDraft((current) => ({ ...current, budget: skipped ? undefined : amount }));
-      setPlanMessages((current) => [...current, message("user", skipped ? "No budget supplied" : `£${amount.toLocaleString("en-GB")}`), message("assistant", "Select the priorities that should shape the comparison.")]);
-      setPlanStage("priorities");
-    } else if (planStage === "date") {
-      const skipped = value.toLowerCase() === "skip";
-      if (!skipped && !/^\d{4}-\d{2}-\d{2}$/.test(value)) { setError("Use YYYY-MM-DD, or type “skip”."); return; }
-      const draft = { ...planDraft, moving_date: skipped ? undefined : value };
-      setPlanDraft(draft);
-      setPlanMessages((current) => [...current, message("user", skipped ? "No move date supplied" : value)]);
-      setInput("");
-      void generatePlan(draft);
-      return;
-    }
-    setInput("");
+    plan.submitText(value);
   }
 
-  function togglePriority(priority: string) {
-    setPlanDraft((current) => ({ ...current, priorities: current.priorities.includes(priority) ? current.priorities.filter((item) => item !== priority) : [...current.priorities, priority] }));
-  }
-
-  function confirmPriorities() {
-    const label = planDraft.priorities.length ? planDraft.priorities.join(", ") : "No priorities selected";
-    setPlanMessages((current) => [...current, message("user", label), message("assistant", "When do you want to move? Use YYYY-MM-DD, or type “skip”.")]);
-    setPlanStage("date");
-  }
-
-  async function generatePlan(draft: PlanDraft) {
-    setLoading(true);
-    setError(null);
-    try {
-      const request: PlanRequest = { goal: draft.goal, location: draft.location, budget: draft.budget, priorities: draft.priorities, moving_date: draft.moving_date, template: "relocation" };
-      const report = await createDecisionPlan(request);
-      setPlanReport(report);
-      setPlanMessages((current) => [...current, message("assistant", "Your evidence-backed report is ready. Review the open questions and download it when you’re satisfied.")]);
-      setPlanStage("report");
-    } catch (requestError) {
-      setError((requestError as Error).message);
-      setUpgradePrompt(requestError instanceof ApiError && (requestError.upgradeRequired || requestError.signInRequired));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function downloadReport() {
-    if (!planReport) return;
-    setError(null);
-    setUpgradePrompt(false);
-    setReportLoading(true);
-    try {
-      const saved = await savePlanReport(planReport);
-      downloadSignedReport(saved.download_url);
-    } catch (requestError) {
-      setError((requestError as Error).message);
-      setUpgradePrompt(requestError instanceof ApiError && (requestError.upgradeRequired || requestError.signInRequired));
-      await refreshAccount();
-    } finally {
-      setReportLoading(false);
-    }
-  }
-
-  const messages = mode === "ask" ? askMessages : planMessages;
-  const planPlaceholder = planStage === "goal" ? "Describe your decision…" : planStage === "location" ? "Town, city, area or postcode…" : planStage === "budget" ? "Budget amount or skip…" : planStage === "date" ? "YYYY-MM-DD or skip…" : "";
+  const messages = mode === "ask" ? ask.messages : plan.messages;
+  const planPlaceholder = plan.stage === "goal" ? "Describe your decision…" : plan.stage === "location" ? "Town, city, area or postcode…" : plan.stage === "budget" ? "Budget amount or skip…" : plan.stage === "date" ? "YYYY-MM-DD or skip…" : "";
 
   return (
     <DecisionDrawerContext.Provider value={{ openDrawer }}>
@@ -253,15 +114,15 @@ export function DecisionDrawerProvider({ children }: { children: ReactNode }) {
           </div>
           <div className="drawer-conversation">
             {messages.map((item) => <div className={`chat-row chat-${item.role}`} key={item.id}>{item.role === "assistant" && <span className="chat-avatar"><Bot size={15} /></span>}<div className="chat-content"><p>{item.text}</p>{item.ask && <AskAnswer answer={item.ask} close={close} />}</div></div>)}
-            {mode === "plan" && planStage === "priorities" && <div className="priority-conversation"><div>{PRIORITIES.map((priority) => <button type="button" className={planDraft.priorities.includes(priority) ? "is-selected" : ""} onClick={() => togglePriority(priority)} key={priority}>{planDraft.priorities.includes(priority) && <Check size={12} />}{priority}</button>)}</div><button className="button" type="button" onClick={confirmPriorities}>Continue <ArrowRight size={15} /></button></div>}
+            {mode === "plan" && plan.stage === "priorities" && <div className="priority-conversation"><div>{PRIORITIES.map((priority) => <button type="button" className={plan.draft.priorities.includes(priority) ? "is-selected" : ""} onClick={() => plan.togglePriority(priority)} key={priority}>{plan.draft.priorities.includes(priority) && <Check size={12} />}{priority}</button>)}</div><button className="button" type="button" onClick={plan.confirmPriorities}>Continue <ArrowRight size={15} /></button></div>}
             {loading && <div className="chat-row chat-assistant"><span className="chat-avatar"><Sparkles size={15} /></span><div className="chat-thinking"><LoaderCircle className="spin" size={16} /><span>{mode === "ask" ? "Querying connected records…" : "Building the evidence report…"}</span></div></div>}
             {error && <div className="drawer-chat-error" role="alert"><CircleAlert size={15} /><span>{error}</span></div>}
             {upgradePrompt && <div className="drawer-upgrade-prompt"><Sparkles size={18} /><div><strong>Continue with an account</strong><p>Sign in to keep your allowance with you, or choose a paid plan for unlimited Ask and Planner access.</p><button className="button" type="button" onClick={() => openAccount(account?.authenticated ? "plans" : "sign-in")}>{account?.authenticated ? "View plans" : "Sign in"}</button></div></div>}
-            {mode === "plan" && planReport && <PlanReport plan={planReport} />}
+            {mode === "plan" && plan.report && <PlanReport plan={plan.report} />}
             <div ref={conversationEnd} />
           </div>
           <footer className="drawer-composer">
-            {mode === "ask" ? <form onSubmit={submitAsk}><textarea aria-label="Ask a question" rows={1} value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask a verified-data question…" /><button type="submit" disabled={loading || input.trim().length < 3} aria-label="Send question"><Send size={17} /></button></form> : planStage === "report" && planReport ? <div className="report-actions"><button className="button" type="button" disabled={reportLoading} onClick={() => void downloadReport()}>{reportLoading ? <LoaderCircle className="spin" size={16} /> : <Download size={16} />}{reportLoading ? "Preparing secure PDF…" : "Save & download PDF"}</button><button className="drawer-icon-action" type="button" onClick={resetPlan} aria-label="Start a new plan"><RefreshCw size={17} /></button></div> : planStage === "priorities" ? <p className="drawer-helper"><BadgeCheck size={14} />Choose any number of priorities, then continue.</p> : <form onSubmit={submitPlanText}><textarea aria-label="Reply to planner" rows={1} value={input} onChange={(event) => setInput(event.target.value)} placeholder={planPlaceholder} /><button type="submit" disabled={loading || !input.trim()} aria-label="Send reply"><Send size={17} /></button></form>}
+            {mode === "ask" ? <form onSubmit={submitAsk}><textarea aria-label="Ask a question" rows={1} value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask a verified-data question…" /><button type="submit" disabled={loading || input.trim().length < 3} aria-label="Send question"><Send size={17} /></button></form> : plan.stage === "report" && plan.report ? <div className="report-actions"><button className="button" type="button" disabled={plan.reportLoading} onClick={() => void plan.downloadReport()}>{plan.reportLoading ? <LoaderCircle className="spin" size={16} /> : <Download size={16} />}{plan.reportLoading ? "Preparing secure PDF…" : "Save & download PDF"}</button><button className="drawer-icon-action" type="button" onClick={plan.reset} aria-label="Start a new plan"><RefreshCw size={17} /></button></div> : plan.stage === "priorities" ? <p className="drawer-helper"><BadgeCheck size={14} />Choose any number of priorities, then continue.</p> : <form onSubmit={submitPlanText}><textarea aria-label="Reply to planner" rows={1} value={input} onChange={(event) => setInput(event.target.value)} placeholder={planPlaceholder} /><button type="submit" disabled={loading || !input.trim()} aria-label="Send reply"><Send size={17} /></button></form>}
             <small><Database size={11} />Connected records are queried read-only. Conversation content is not saved by VeriFinder.</small>
           </footer>
         </section>

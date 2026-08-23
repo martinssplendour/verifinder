@@ -5,6 +5,8 @@
 senior-project-pack/
 __pycache__/
 .pytest_cache/
+.pytest-*/
+.artifacts/
 .venv/
 *.py[cod]
 *.sqlite3
@@ -21,4 +23,5 @@ coverage/
 raw-data/*
 !raw-data/.gitkeep
 public-data/
+backend/codex-test-tmp/
 supabase/.temp/
