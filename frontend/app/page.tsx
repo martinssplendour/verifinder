@@ -3,14 +3,12 @@ import {
   ArrowRight,
   BookOpen,
   Building2,
-  Check,
   GraduationCap,
   Home,
   Landmark,
   MapPin,
   RefreshCw,
   School,
-  SearchCheck,
   ShieldCheck,
   Sparkles,
   Utensils,
@@ -40,25 +38,16 @@ export default function HomePage() {
         <div className="hero-search"><SearchBox /></div>
       </section>
 
-      <section className="shell intelligence-entry" aria-labelledby="decision-tools">
-        <div className="intelligence-entry-heading">
-          <span className="kicker">Decision intelligence</span>
-          <h2 id="decision-tools">Move from isolated checks to a useful answer.</h2>
-          <p>Ask across connected public records, or build a plan that keeps facts, calculations, inferences and unknowns visibly separate.</p>
-        </div>
-        <div className="intelligence-entry-actions">
-          <DecisionTrigger className="intelligence-card intelligence-card-ask" mode="ask">
-            <span><MessageSquareText size={24} /></span>
-            <div><strong>Ask VeriFinder</strong><small>“Show me licensed sponsors in Sheffield”</small></div>
-            <ArrowRight size={19} />
-          </DecisionTrigger>
-          <DecisionTrigger className="intelligence-card intelligence-card-plan" mode="plan">
-            <span><Route size={24} /></span>
-            <div><strong>Build a decision plan</strong><small>“Help me plan a move around Manchester”</small></div>
-            <ArrowRight size={19} />
-          </DecisionTrigger>
-        </div>
-      </section>
+      <aside className="decision-launchers" aria-label="Decision tools">
+        <DecisionTrigger className="decision-launcher decision-launcher-ask" mode="ask">
+          <MessageSquareText size={18} />
+          <strong>Ask VeriFinder</strong>
+        </DecisionTrigger>
+        <DecisionTrigger className="decision-launcher decision-launcher-plan" mode="plan">
+          <Route size={18} />
+          <strong>Build a decision plan</strong>
+        </DecisionTrigger>
+      </aside>
 
       <section className="shell category-grid" aria-labelledby="ways-to-check">
         <h2 className="sr-only" id="ways-to-check">Ways to check</h2>
@@ -87,7 +76,7 @@ export default function HomePage() {
           <span className="change-empty-icon"><Sparkles size={23} /></span>
           <div>
             <h3>Change tracking begins with the first official import</h3>
-            <p>Genuine additions, removals and route changes will appear after VeriFinder has collected multiple sponsor-register versions. No placeholder statistics are shown.</p>
+            <p>Genuine additions, removals and route changes will appear after VeriFinder has collected multiple sponsor-register versions.</p>
           </div>
           <Link href="/about">How change tracking works <ArrowRight size={15} /></Link>
         </div>
@@ -109,19 +98,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="shell trust-panel">
-        <div className="trust-icon"><SearchCheck size={31} /></div>
-        <div>
-          <span className="kicker">Evidence, not guesswork</span>
-          <h2>Every important answer keeps its receipt.</h2>
-          <p>VeriFinder keeps source, retrieval and version information attached to the facts it presents—so “verified” always means traceable.</p>
-        </div>
-        <ul>
-          <li><Check size={16} /> Official-source attribution</li>
-          <li><Check size={16} /> Careful no-match language</li>
-          <li><Check size={16} /> Historical dataset versions</li>
-        </ul>
-      </section>
     </>
   );
 }

@@ -3,7 +3,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
 
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -28,6 +28,7 @@ def test_billing_migrations_create_only_transactional_tables(tmp_path):
     tables = set(inspector.get_table_names())
     assert tables == {
         "billing_alembic_version",
+        "app_admins",
         "coin_transactions",
         "coin_wallets",
         "ask_conversation_records",
@@ -50,3 +51,11 @@ def test_billing_migrations_create_only_transactional_tables(tmp_path):
     # Supabase migration role may not own that pre-existing table.
     assert inspector.get_foreign_keys("coin_wallets") == []
     assert inspector.get_foreign_keys("coin_transactions") == []
+    with create_engine(f"sqlite:///{database.as_posix()}").connect() as connection:
+        grant = connection.execute(
+            text("SELECT email, role, active FROM app_admins WHERE email = :email"),
+            {"email": "okhimhemartins@gmail.com"},
+        ).one()
+    assert grant.email == "okhimhemartins@gmail.com"
+    assert grant.role == "admin"
+    assert bool(grant.active) is True

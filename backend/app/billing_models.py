@@ -38,6 +38,18 @@ class Profile(BillingBase):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
 
+class AppAdmin(BillingBase):
+    """Database-backed access grant for VeriFinder's internal admin area."""
+
+    __tablename__ = "app_admins"
+
+    email: Mapped[str] = mapped_column(String(320), primary_key=True)
+    role: Mapped[str] = mapped_column(String(32), default="admin")
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+
 class Subscription(BillingBase):
     """Canonical billing state synchronized from Stripe webhooks."""
 

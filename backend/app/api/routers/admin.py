@@ -4,9 +4,12 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.billing_database import get_billing_db
 from app.config import get_settings
 from app.database import get_read_db
 from app.models import IngestionRun, RunStatus
+from app.services.admin_access import require_app_admin
+from app.services.auth import RequestIdentity, identity_dependency
 from app.services.food_lookup import latest_food_context
 from app.services.property_lookup import latest_property_context
 from app.services.qualification_lookup import (
@@ -25,7 +28,12 @@ settings = get_settings()
 
 
 @router.get("/admin/summary")
-async def admin_summary(session: Session = Depends(get_read_db)):
+async def admin_summary(
+    session: Session = Depends(get_read_db),
+    billing_session: Session = Depends(get_billing_db),
+    identity: RequestIdentity = Depends(identity_dependency),
+):
+    require_app_admin(billing_session, identity)
     sponsor_context = latest_sponsor_context(session)
     qualification_context = latest_qualification_context(session)
     welsh_qualification_context = latest_welsh_qualification_context(session)
