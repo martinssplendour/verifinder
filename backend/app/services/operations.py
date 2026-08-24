@@ -148,6 +148,7 @@ def run_operational_checks() -> list[OperationCheck]:
 async def run_maintenance_cycle() -> dict:
     if not acquire_scheduler_lease():
         return {"status": "skipped", "reason": "lease_held"}
+    settings = get_settings()
     detail: dict = {}
     status = "ok"
     try:
@@ -162,7 +163,16 @@ async def run_maintenance_cycle() -> dict:
         def record_refresh_progress(result: dict) -> None:
             update_scheduler_progress("public_data_refresh", source=result)
 
-        detail["refresh"] = await asyncio.to_thread(refresh_due_sources, on_progress=record_refresh_progress)
+        if settings.public_data_mode == "parquet":
+            skipped_refresh = {
+                "source": "all",
+                "status": "skipped_read_only",
+                "reason": "Parquet production snapshots are immutable; refresh the source snapshot offline.",
+            }
+            detail["refresh"] = [skipped_refresh]
+            record_refresh_progress(skipped_refresh)
+        else:
+            detail["refresh"] = await asyncio.to_thread(refresh_due_sources, on_progress=record_refresh_progress)
         if any(item.get("status") == "failed" for item in detail["refresh"]):
             status = "attention"
 

@@ -26,6 +26,7 @@ def test_maintenance_records_checks_before_refresh_and_heartbeats(monkeypatch):
     events: list[str] = []
     finished: list[tuple[str, dict]] = []
 
+    monkeypatch.setattr(operations, "get_settings", lambda: SimpleNamespace(public_data_mode="sqlite"))
     monkeypatch.setattr(operations, "acquire_scheduler_lease", lambda: True)
     monkeypatch.setattr(
         operations,
@@ -63,6 +64,43 @@ def test_maintenance_records_checks_before_refresh_and_heartbeats(monkeypatch):
     assert events.count("public_data_refresh") == 2
     assert events[-2:] == ["watchlists", "watchlists_run"]
     assert finished[-1][0] == "ok"
+
+
+def test_maintenance_skips_writable_refresh_for_parquet_mode(monkeypatch):
+    progress: list[tuple[str, dict | None]] = []
+    finished: list[tuple[str, dict]] = []
+
+    monkeypatch.setattr(operations, "get_settings", lambda: SimpleNamespace(public_data_mode="parquet"))
+    monkeypatch.setattr(operations, "acquire_scheduler_lease", lambda: True)
+    monkeypatch.setattr(
+        operations,
+        "update_scheduler_progress",
+        lambda phase, **kwargs: progress.append((phase, kwargs.get("source"))),
+    )
+    monkeypatch.setattr(operations, "run_operational_checks", lambda: [])
+    monkeypatch.setattr(
+        operations,
+        "refresh_due_sources",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("read-only Parquet data must not be refreshed")),
+    )
+    monkeypatch.setattr(operations, "SessionLocal", DummySession)
+    monkeypatch.setattr(operations, "BillingSessionLocal", DummySession)
+    monkeypatch.setattr(operations, "scan_live_watchlists", lambda _public, _billing: asyncio.sleep(0, result=[]))
+    monkeypatch.setattr(operations, "retry_pending_alerts", lambda _session: {"attempted": 0})
+    monkeypatch.setattr(operations, "finish_scheduler_lease", lambda status, detail: finished.append((status, detail)))
+
+    result = asyncio.run(operations.run_maintenance_cycle())
+
+    assert result["status"] == "ok"
+    assert result["refresh"] == [
+        {
+            "source": "all",
+            "status": "skipped_read_only",
+            "reason": "Parquet production snapshots are immutable; refresh the source snapshot offline.",
+        }
+    ]
+    assert ("public_data_refresh", result["refresh"][0]) in progress
+    assert finished == [("ok", {key: value for key, value in result.items() if key != "status"})]
 
 
 def test_bounded_cycle_marks_timeout_as_failed(monkeypatch):
