@@ -860,6 +860,10 @@ button { color: inherit; }
 .drawer-upgrade-prompt strong { font-size: 11px; }
 .drawer-upgrade-prompt p { margin: 3px 0 9px; color: var(--ink-soft); font-size: 9px; }
 .drawer-upgrade-prompt .button { min-height: 32px; padding: 0 11px; font-size: 9px; }
+.drawer-suggestions { margin-top: 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.drawer-suggestions > span { color: var(--ink-soft); font-size: 9px; font-weight: 750; text-transform: uppercase; }
+.drawer-suggestions button { padding: 6px 10px; border: 1px solid #d9def5; border-radius: 999px; display: inline-flex; align-items: center; gap: 5px; color: var(--brand); background: #f8f9ff; font: inherit; font-size: 10px; font-weight: 700; cursor: pointer; transition: border-color .16s ease, background .16s ease; }
+.drawer-suggestions button:hover { border-color: var(--brand); background: var(--brand-soft); }
 
 /* Ask and Planner are account features: every surface says so before the input */
 .signin-gate { padding: 40px 30px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }

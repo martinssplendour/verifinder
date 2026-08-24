@@ -13,9 +13,20 @@ from app.services.decision_intelligence import (
     contextual_interpretation,
     deterministic_interpretation,
 )
-from app.services.gemini_reasoning import _output_text
+from app.services.gemini_reasoning import GeminiReasoner, ResultReview, _output_text
 from test_area_property import data_session
 from test_sponsor_lookup import sponsor_session
+
+
+@pytest.fixture(autouse=True)
+def deterministic_reasoner(monkeypatch: pytest.MonkeyPatch):
+    """Hold the model out of these tests.
+
+    They assert VeriFinder's own query, review and presentation logic. A live
+    Gemini call would make them slow, billable and non-reproducible, and an
+    unconfigured reasoner is the exact fallback path the service already takes.
+    """
+    monkeypatch.setattr(GeminiReasoner, "configured", property(lambda self: False))
 
 
 def test_sponsorship_question_becomes_controlled_location_query():
@@ -46,19 +57,37 @@ def test_job_question_is_not_misrepresented_as_verified_vacancies():
     assert query.location == "Sheffield"
     assert query.industry == "technology"
 
+    # The register is the closest verifiable evidence, so a jobs question is
+    # answered from it - but every record is labelled a sponsor, never a vacancy.
     response = asyncio.run(
         answer_question(
             sponsor_session(),
-            AskRequest(question="Top 10 tech jobs in Sheffield", limit=10),
+            AskRequest(question="Top 10 jobs in London", limit=10),
+        )
+    )
+    assert response.total == 1
+    assert response.results[0].title == "Northstar Labs Ltd"
+    assert response.results[0].result_type == "worker_sponsor"
+    assert response.results[0].subtitle == "Licensed worker sponsor"
+    assert "licensed" in response.headline.lower()
+    assert "vacanc" not in response.headline.lower()
+    assert any("live jobs or vacancies feed" in item for item in response.limitations)
+    assert any("not vacancies" in item for item in response.limitations)
+    assert response.suggested_questions == []
+
+
+def test_jobs_question_without_matches_offers_a_way_forward():
+    response = asyncio.run(
+        answer_question(
+            sponsor_session(),
+            AskRequest(question="Top 10 hospitality jobs in Aberdeen", limit=10),
         )
     )
     assert response.results == []
-    assert response.headline == "Live job listings are not connected yet"
     assert response.suggested_questions == [
-        "Show me technology organisations with worker sponsorship in Sheffield",
-        "Find regulated technology qualifications",
+        "Show me hospitality organisations with worker sponsorship in Aberdeen",
+        "Find regulated hospitality qualifications",
     ]
-    assert any("live jobs or vacancies feed" in item for item in response.limitations)
 
 
 def test_ask_returns_sponsor_records_with_receipts_and_no_hiring_claim():
@@ -179,3 +208,63 @@ def test_gemini_output_text_is_extracted_from_candidate_parts():
         ]
     }
     assert _output_text(payload) == '{"intent":"general"}'
+
+
+def test_review_may_requery_once_and_the_better_result_set_wins(monkeypatch: pytest.MonkeyPatch):
+    async def review(self, *, question, interpretation, results, requested_limit):
+        assert results == []
+        return ResultReview(
+            answers_question=False,
+            assessment="The location filter matched no register entry.",
+            revision=interpretation.model_copy(update={"location": "London"}),
+        )
+
+    monkeypatch.setattr(GeminiReasoner, "review_results", review)
+    response = asyncio.run(
+        answer_question(
+            sponsor_session(),
+            AskRequest(question="Top 10 jobs in Aberdeen", limit=10),
+        )
+    )
+    assert response.results[0].title == "Northstar Labs Ltd"
+    assert response.interpretation.location == "London"
+    assert any("re-run after review" in item for item in response.interpretation.assumptions)
+    assert response.ai_mode == "gemini"
+
+
+def test_review_revision_is_discarded_when_it_finds_less(monkeypatch: pytest.MonkeyPatch):
+    async def review(self, *, question, interpretation, results, requested_limit):
+        return ResultReview(
+            answers_question=False,
+            assessment="Trying a narrower location.",
+            revision=interpretation.model_copy(update={"location": "Aberdeen"}),
+        )
+
+    monkeypatch.setattr(GeminiReasoner, "review_results", review)
+    response = asyncio.run(
+        answer_question(
+            sponsor_session(),
+            AskRequest(question="Top 10 jobs in London", limit=10),
+        )
+    )
+    # A worse revision must never replace a result set that already had records.
+    assert response.results[0].title == "Northstar Labs Ltd"
+    assert response.interpretation.location == "London"
+
+
+def test_review_cannot_raise_the_caller_limit(monkeypatch: pytest.MonkeyPatch):
+    async def review(self, *, question, interpretation, results, requested_limit):
+        return ResultReview(
+            answers_question=False,
+            assessment="Widening the search.",
+            revision=interpretation.model_copy(update={"location": "London", "limit": 20}),
+        )
+
+    monkeypatch.setattr(GeminiReasoner, "review_results", review)
+    response = asyncio.run(
+        answer_question(
+            sponsor_session(),
+            AskRequest(question="Top 10 jobs in Aberdeen", limit=3),
+        )
+    )
+    assert response.interpretation.limit <= 3
