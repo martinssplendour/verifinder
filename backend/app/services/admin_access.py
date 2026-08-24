@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.billing_models import AppAdmin
-from app.services.auth import RequestIdentity
+
+if TYPE_CHECKING:
+    from app.services.auth import RequestIdentity
 
 
 ADMIN_ROLE = "admin"

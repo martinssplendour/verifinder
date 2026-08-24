@@ -11,6 +11,7 @@ import {
   useState,
 } from "react";
 import type { Session } from "@supabase/supabase-js";
+import Link from "next/link";
 import { UserRound, X } from "lucide-react";
 import { createCheckout, getAccountStatus, openBillingPortal } from "@/services/api";
 import { getSupabaseClient } from "@/services/supabase";
@@ -203,12 +204,12 @@ export function AccountActions() {
   const { session, account, loading, openAccount } = useAccount();
   if (loading) return <div className="account-actions"><span className="account-loading">Account</span></div>;
   if (session) {
-    return <div className="account-actions"><button className="account-pill" type="button" onClick={() => openAccount("account")}><UserRound size={14} /><span>{session.user.email?.split("@")[0]}</span><em>{account?.entitlements.tier || "free"}</em></button></div>;
+    return <div className="account-actions">{account?.is_admin && <Link className="text-button" href="/admin">Admin</Link>}<button className="account-pill" type="button" onClick={() => openAccount("account")}><UserRound size={14} /><span>{session.user.email?.split("@")[0]}</span><em>{account?.is_admin ? "admin" : account?.entitlements.tier || "free"}</em></button></div>;
   }
   return <div className="account-actions"><button className="text-button" type="button" onClick={() => openAccount("sign-in")}>Sign in</button><button className="button button-small" type="button" onClick={() => openAccount("plans")}>Sign up</button></div>;
 }
 
 export function MobileAccountAction() {
-  const { session, openAccount } = useAccount();
-  return <button type="button" onClick={() => openAccount(session ? "account" : "sign-in")}>{session ? "Account" : "Sign in"}</button>;
+  const { session, account, openAccount } = useAccount();
+  return <>{account?.is_admin && <Link href="/admin">Admin</Link>}<button type="button" onClick={() => openAccount(session ? "account" : "sign-in")}>{session ? "Account" : "Sign in"}</button></>;
 }

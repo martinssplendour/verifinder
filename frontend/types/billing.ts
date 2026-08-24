@@ -9,6 +9,7 @@ export interface FeatureAllowance {
 export interface AccountStatus {
   authenticated: boolean;
   email: string | null;
+  is_admin: boolean;
   entitlements: {
     tier: SubscriptionTier;
     ask: FeatureAllowance;

@@ -35,6 +35,7 @@ async def ask_verifinder(
         subject_ids=identity.quota_subject_ids,
         network_hash=identity.network_hash,
         authenticated=identity.authenticated,
+        email=identity.email,
     )
     if not entitlement.allowed:
         raise _entitlement_error(entitlement)
@@ -97,6 +98,7 @@ async def create_plan(
         identity.subject_id,
         subject_ids=identity.quota_subject_ids,
         network_hash=identity.network_hash,
+        email=identity.email,
     )
     if not entitlement.allowed:
         raise _entitlement_error(entitlement)

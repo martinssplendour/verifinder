@@ -11,6 +11,7 @@ from app.schemas import (
     ReportAccessResponse,
 )
 from app.services.auth import RequestIdentity, identity_dependency, require_authenticated
+from app.services.admin_access import active_admin_grant
 from app.services.entitlements import (
     check_report_entitlement,
     coin_balance,
@@ -58,11 +59,13 @@ async def account_status(
         identity.subject_id,
         subject_ids=identity.quota_subject_ids,
         network_hash=identity.network_hash,
+        email=identity.email,
     )
     profile = billing_session.get(Profile, identity.subject_id)
     return AccountStatusResponse(
         authenticated=identity.authenticated,
         email=identity.email,
+        is_admin=active_admin_grant(billing_session, identity.email) is not None,
         entitlements=snapshot,
         billing_configured=billing_configured(),
         coin_billing_configured=coin_billing_configured(),
@@ -130,7 +133,7 @@ async def report_access(
     billing_session: Session = Depends(get_billing_db),
     identity: RequestIdentity = Depends(identity_dependency),
 ):
-    result = check_report_entitlement(billing_session, identity.subject_id)
+    result = check_report_entitlement(billing_session, identity.subject_id, identity.email)
     if not result.allowed:
         raise _entitlement_error(result)
     return ReportAccessResponse(allowed=True)

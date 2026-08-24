@@ -5,6 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.billing_models import (
+    AppAdmin,
     BillingBase,
     CoinTransaction,
     CoinWallet,
@@ -18,6 +19,8 @@ from app.services.entitlements import (
     check_ask_entitlement,
     check_planner_entitlement,
     check_report_entitlement,
+    check_watchlist_entitlement,
+    entitlement_snapshot,
     get_or_create_profile,
     record_usage,
     refund_ask_coin,
@@ -203,3 +206,38 @@ def test_report_entitlement_allowed_on_professional_tier():
     session.commit()
     result = check_report_entitlement(session, "anon-8")
     assert result.allowed is True
+
+
+def test_admin_grant_bypasses_all_product_entitlement_restrictions():
+    session = entitlements_session()
+    subject_id = "admin-user"
+    email = "okhimhemartins@gmail.com"
+    session.add(Profile(id=subject_id, email=email, tier=SubscriptionTier.FREE))
+    session.add(AppAdmin(email=email, role="admin", active=True))
+    session.commit()
+    record_usage(session, subject_id, "ask")
+    record_usage(session, subject_id, "planner")
+
+    ask = reserve_ask(
+        session,
+        subject_id,
+        " ".join(["word"] * 100),
+        authenticated=True,
+        email=email,
+    )
+    planner = check_planner_entitlement(session, subject_id, email=email)
+    report = check_report_entitlement(session, subject_id, email)
+    watchlist = check_watchlist_entitlement(session, subject_id, email)
+    snapshot = entitlement_snapshot(session, subject_id, email=email)
+
+    assert ask.allowed is True
+    assert ask.tier == SubscriptionTier.PROFESSIONAL
+    assert ask.coin_reservation_id is None
+    assert planner.allowed is True
+    assert report.allowed is True
+    assert watchlist.allowed is True
+    assert snapshot["tier"] == "professional"
+    assert snapshot["ask"]["word_limit"] is None
+    assert snapshot["planner"]["allowed"] is True
+    assert snapshot["report_download"]["allowed"] is True
+    assert snapshot["watchlists"]["allowed"] is True

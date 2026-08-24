@@ -23,6 +23,7 @@ class AccountEntitlements(BaseModel):
 class AccountStatusResponse(BaseModel):
     authenticated: bool
     email: str | None = None
+    is_admin: bool = False
     entitlements: AccountEntitlements
     billing_configured: bool
     coin_billing_configured: bool

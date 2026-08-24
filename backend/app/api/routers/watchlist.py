@@ -53,7 +53,7 @@ async def add_to_watchlist(
     identity: RequestIdentity = Depends(identity_dependency),
 ):
     require_authenticated(identity)
-    entitlement = check_watchlist_entitlement(billing_session, identity.subject_id)
+    entitlement = check_watchlist_entitlement(billing_session, identity.subject_id, identity.email)
     if not entitlement.allowed:
         raise _entitlement_error(entitlement)
     try:

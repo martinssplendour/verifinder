@@ -21,6 +21,7 @@ from app.billing_models import (
     UsageEvent,
 )
 from app.config import get_settings
+from app.services.admin_access import active_admin_grant
 
 
 COOKIE_NAME = "vf_subject"
@@ -190,7 +191,7 @@ def get_or_create_subscription(session: Session, user_id: str) -> Subscription:
     return subscription
 
 
-def effective_tier(session: Session, subject_id: str) -> SubscriptionTier:
+def _subscription_tier(session: Session, subject_id: str) -> SubscriptionTier:
     subscription = session.scalar(select(Subscription).where(Subscription.user_id == subject_id))
     if subscription and subscription.status in PAID_STATUSES:
         return subscription.tier
@@ -199,6 +200,28 @@ def effective_tier(session: Session, subject_id: str) -> SubscriptionTier:
     if profile and profile.tier != SubscriptionTier.FREE and profile.subscription_status in (None, *PAID_STATUSES):
         return profile.tier
     return SubscriptionTier.FREE
+
+
+def has_unrestricted_admin_access(
+    session: Session,
+    subject_id: str,
+    email: str | None = None,
+) -> bool:
+    resolved_email = email
+    if not resolved_email:
+        profile = session.get(Profile, subject_id)
+        resolved_email = profile.email if profile else None
+    return active_admin_grant(session, resolved_email) is not None
+
+
+def effective_tier(
+    session: Session,
+    subject_id: str,
+    email: str | None = None,
+) -> SubscriptionTier:
+    if has_unrestricted_admin_access(session, subject_id, email):
+        return SubscriptionTier.PROFESSIONAL
+    return _subscription_tier(session, subject_id)
 
 
 def _usage_filter(
@@ -273,9 +296,13 @@ def check_ask_entitlement(
     subject_ids: tuple[str, ...] | None = None,
     network_hash: str | None = None,
     authenticated: bool = False,
+    email: str | None = None,
 ) -> EntitlementResult:
-    tier = effective_tier(session, subject_id)
+    admin = has_unrestricted_admin_access(session, subject_id, email)
+    tier = SubscriptionTier.PROFESSIONAL if admin else _subscription_tier(session, subject_id)
     word_count = len(question.split())
+    if admin:
+        return EntitlementResult(allowed=True, tier=tier)
     if tier != SubscriptionTier.FREE:
         if word_count > ASK_PAID_LIMIT_WORDS:
             return EntitlementResult(
@@ -329,8 +356,9 @@ def check_planner_entitlement(
     *,
     subject_ids: tuple[str, ...] | None = None,
     network_hash: str | None = None,
+    email: str | None = None,
 ) -> EntitlementResult:
-    tier = effective_tier(session, subject_id)
+    tier = effective_tier(session, subject_id, email)
     if tier != SubscriptionTier.FREE:
         return EntitlementResult(allowed=True, tier=tier)
     identities = subject_ids or (subject_id,)
@@ -345,8 +373,12 @@ def check_planner_entitlement(
     return EntitlementResult(allowed=True)
 
 
-def check_report_entitlement(session: Session, subject_id: str) -> EntitlementResult:
-    tier = effective_tier(session, subject_id)
+def check_report_entitlement(
+    session: Session,
+    subject_id: str,
+    email: str | None = None,
+) -> EntitlementResult:
+    tier = effective_tier(session, subject_id, email)
     if tier != SubscriptionTier.FREE:
         return EntitlementResult(allowed=True, tier=tier)
     return EntitlementResult(
@@ -356,8 +388,12 @@ def check_report_entitlement(session: Session, subject_id: str) -> EntitlementRe
     )
 
 
-def check_watchlist_entitlement(session: Session, subject_id: str) -> EntitlementResult:
-    tier = effective_tier(session, subject_id)
+def check_watchlist_entitlement(
+    session: Session,
+    subject_id: str,
+    email: str | None = None,
+) -> EntitlementResult:
+    tier = effective_tier(session, subject_id, email)
     if tier != SubscriptionTier.FREE:
         return EntitlementResult(allowed=True, tier=tier)
     return EntitlementResult(
@@ -375,6 +411,7 @@ def reserve_ask(
     subject_ids: tuple[str, ...] | None = None,
     network_hash: str | None = None,
     authenticated: bool = False,
+    email: str | None = None,
 ) -> EntitlementResult:
     result = check_ask_entitlement(
         session,
@@ -383,6 +420,7 @@ def reserve_ask(
         subject_ids=subject_ids,
         network_hash=network_hash,
         authenticated=authenticated,
+        email=email,
     )
     if not result.allowed:
         return result
@@ -464,9 +502,14 @@ def reserve_planner(
     *,
     subject_ids: tuple[str, ...] | None = None,
     network_hash: str | None = None,
+    email: str | None = None,
 ) -> EntitlementResult:
     result = check_planner_entitlement(
-        session, subject_id, subject_ids=subject_ids, network_hash=network_hash
+        session,
+        subject_id,
+        subject_ids=subject_ids,
+        network_hash=network_hash,
+        email=email,
     )
     if not result.allowed:
         return result
@@ -484,9 +527,11 @@ def entitlement_snapshot(
     *,
     subject_ids: tuple[str, ...] | None = None,
     network_hash: str | None = None,
+    email: str | None = None,
 ) -> dict[str, object]:
     identities = subject_ids or (subject_id,)
-    tier = effective_tier(session, subject_id)
+    admin = has_unrestricted_admin_access(session, subject_id, email)
+    tier = SubscriptionTier.PROFESSIONAL if admin else _subscription_tier(session, subject_id)
     paid = tier != SubscriptionTier.FREE
     balance = coin_balance(session, subject_id) if not subject_id.startswith("anon-") else 0
     ask_first = None if paid else _first_recent_usage(session, identities, "ask", ASK_FREE_WINDOW, network_hash)
@@ -497,7 +542,7 @@ def entitlement_snapshot(
         "tier": tier.value,
         "ask": {
             "allowed": paid or balance > 0 or ask_first is None,
-            "word_limit": ASK_PAID_LIMIT_WORDS if paid or balance > 0 else ASK_FREE_LIMIT_WORDS,
+            "word_limit": None if admin else ASK_PAID_LIMIT_WORDS if paid or balance > 0 else ASK_FREE_LIMIT_WORDS,
             "reset_at": ask_first + ASK_FREE_WINDOW if ask_first else None,
         },
         "planner": {

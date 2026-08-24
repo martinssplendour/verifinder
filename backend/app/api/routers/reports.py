@@ -52,7 +52,7 @@ async def save_report(
     billing_session: Session = Depends(get_billing_db),
     identity: RequestIdentity = Depends(identity_dependency),
 ):
-    result = check_report_entitlement(billing_session, identity.subject_id)
+    result = check_report_entitlement(billing_session, identity.subject_id, identity.email)
     if not result.allowed:
         raise _entitlement_error(result)
     if not report_storage_configured():
