@@ -23,6 +23,7 @@ import { ApiError, createDecisionPlan, savePlanReport } from "@/services/api";
 import { downloadSignedReport } from "@/services/report";
 import type { DecisionEvidenceKind, DecisionPlanResponse, PlanRequest } from "@/types";
 import { useAccount } from "@/components/Account";
+import { SignInGate } from "@/components/SignInGate";
 
 const PRIORITIES = ["Housing cost", "Work sponsorship", "Study", "Schools", "Crime", "Planning", "Flood risk"];
 const KIND_LABELS: Record<DecisionEvidenceKind, string> = {
@@ -33,7 +34,7 @@ const KIND_LABELS: Record<DecisionEvidenceKind, string> = {
 };
 
 export default function PlanPage() {
-  const { account, openAccount } = useAccount();
+  const { session, account, openAccount } = useAccount();
   const [goal, setGoal] = useState("I want the best relocation plan around Manchester");
   const [location, setLocation] = useState("Manchester");
   const [budget, setBudget] = useState("");
@@ -101,6 +102,9 @@ export default function PlanPage() {
       </section>
 
       <section className="shell plan-workspace">
+        {!session ? (
+          <SignInGate className="plan-signin-gate" feature="the Decision Planner" onSignIn={() => openAccount("sign-in")} />
+        ) : (
         <form className="plan-brief" onSubmit={submit}>
           <div className="plan-form-heading"><div><span className="kicker">Decision brief</span><h2>What are you trying to achieve?</h2></div><span><Save size={14} /> Private PDF when saved</span></div>
           <label className="decision-field field-wide"><span>Your goal</span><textarea value={goal} onChange={(event) => setGoal(event.target.value)} rows={3} maxLength={1200} /></label>
@@ -113,6 +117,7 @@ export default function PlanPage() {
           <fieldset className="priority-field"><legend>What matters most?</legend><div>{PRIORITIES.map((priority) => <button className={priorities.includes(priority) ? "is-selected" : ""} type="button" key={priority} onClick={() => togglePriority(priority)}>{priorities.includes(priority) && <Check size={13} />}{priority}</button>)}</div></fieldset>
           <button className="button plan-submit" type="submit" disabled={loading || goal.trim().length < 5}>{loading ? <LoaderCircle className="spin" size={18} /> : <Sparkles size={17} />}{loading ? "Building plan…" : "Build verified plan"}</button>
         </form>
+        )}
 
         {error && <div className="decision-error" role="alert"><CircleAlert size={19} /><div><strong>Could not build this plan</strong><span>{error}</span></div></div>}
         {loading && !data && <div className="plan-loading"><LoaderCircle className="spin" size={22} /><div><strong>Matching your brief to the evidence</strong><span>Checking recent sales, sponsorship, study and school records…</span></div></div>}

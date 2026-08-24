@@ -98,6 +98,7 @@ async def create_plan(
         identity.subject_id,
         subject_ids=identity.quota_subject_ids,
         network_hash=identity.network_hash,
+        authenticated=identity.authenticated,
         email=identity.email,
     )
     if not entitlement.allowed:

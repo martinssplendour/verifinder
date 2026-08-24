@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { ApiError, createDecisionPlan, savePlanReport } from "@/services/api";
 import { downloadSignedReport } from "@/services/report";
 import type { DecisionPlanResponse, PlanRequest } from "@/types";
-import type { ChatMessage } from "./useAskConversation";
+import { isBlocking, type ChatMessage } from "./useAskConversation";
 
 export type PlanStage = "goal" | "location" | "budget" | "priorities" | "date" | "report";
 type PlanDraft = { goal: string; location: string; budget?: number; priorities: string[]; moving_date?: string };
@@ -14,12 +14,12 @@ const INITIAL_PLAN: ChatMessage[] = [{ id: 1, role: "assistant", text: "What dec
 type Options = {
   setLoading: (value: boolean) => void;
   setError: (value: string | null) => void;
-  setUpgradePrompt: (value: boolean) => void;
+  setBlocked: (value: ApiError | null) => void;
   setInput: (value: string) => void;
   refreshAccount: () => Promise<void>;
 };
 
-export function usePlanConversation({ setLoading, setError, setUpgradePrompt, setInput, refreshAccount }: Options) {
+export function usePlanConversation({ setLoading, setError, setBlocked, setInput, refreshAccount }: Options) {
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_PLAN);
   const [stage, setStage] = useState<PlanStage>("goal");
   const [draft, setDraft] = useState<PlanDraft>({ goal: "", location: "", priorities: [] });
@@ -37,7 +37,7 @@ export function usePlanConversation({ setLoading, setError, setUpgradePrompt, se
     setStage("goal");
     setReport(null);
     setError(null);
-    setUpgradePrompt(false);
+    setBlocked(null);
     setInput("");
   }
 
@@ -58,8 +58,8 @@ export function usePlanConversation({ setLoading, setError, setUpgradePrompt, se
       setMessages((current) => [...current, message("assistant", "Your evidence-backed report is ready. Review the open questions and download it when you’re satisfied.")]);
       setStage("report");
     } catch (requestError) {
-      setError((requestError as Error).message);
-      setUpgradePrompt(requestError instanceof ApiError && (requestError.upgradeRequired || requestError.signInRequired));
+      setError(requestError instanceof ApiError && isBlocking(requestError) ? null : (requestError as Error).message);
+      setBlocked(requestError instanceof ApiError && isBlocking(requestError) ? requestError : null);
     } finally {
       setLoading(false);
     }
@@ -126,14 +126,14 @@ export function usePlanConversation({ setLoading, setError, setUpgradePrompt, se
   async function downloadReport() {
     if (!report) return;
     setError(null);
-    setUpgradePrompt(false);
+    setBlocked(null);
     setReportLoading(true);
     try {
       const saved = await savePlanReport(report);
       downloadSignedReport(saved.download_url);
     } catch (requestError) {
-      setError((requestError as Error).message);
-      setUpgradePrompt(requestError instanceof ApiError && (requestError.upgradeRequired || requestError.signInRequired));
+      setError(requestError instanceof ApiError && isBlocking(requestError) ? null : (requestError as Error).message);
+      setBlocked(requestError instanceof ApiError && isBlocking(requestError) ? requestError : null);
       await refreshAccount();
     } finally {
       setReportLoading(false);

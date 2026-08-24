@@ -288,6 +288,20 @@ def record_usage(
     return True
 
 
+SIGN_IN_REQUIRED_ASK = "Sign in to ask VeriFinder a question."
+SIGN_IN_REQUIRED_PLANNER = "Sign in to build a decision plan."
+
+
+def _sign_in_required(code: str, message: str) -> EntitlementResult:
+    """Ask and the planner are account features, so the gate comes before any quota."""
+    return EntitlementResult(
+        allowed=False,
+        code=code,
+        message=message,
+        sign_in_required=True,
+    )
+
+
 def check_ask_entitlement(
     session: Session,
     subject_id: str,
@@ -298,6 +312,8 @@ def check_ask_entitlement(
     authenticated: bool = False,
     email: str | None = None,
 ) -> EntitlementResult:
+    if not authenticated:
+        return _sign_in_required("ask_sign_in_required", SIGN_IN_REQUIRED_ASK)
     admin = has_unrestricted_admin_access(session, subject_id, email)
     tier = SubscriptionTier.PROFESSIONAL if admin else _subscription_tier(session, subject_id)
     word_count = len(question.split())
@@ -323,27 +339,18 @@ def check_ask_entitlement(
     needs_coin = word_count > ASK_FREE_LIMIT_WORDS or first is not None
     if not needs_coin:
         return EntitlementResult(allowed=True)
-    balance = coin_balance(session, subject_id) if authenticated else 0
-    if authenticated and balance > 0:
+    balance = coin_balance(session, subject_id)
+    if balance > 0:
         return EntitlementResult(allowed=True, coin_balance=balance)
-    if not authenticated:
-        reason = (
-            f"Free questions are limited to {ASK_FREE_LIMIT_WORDS} words."
-            if word_count > ASK_FREE_LIMIT_WORDS
-            else "You've used today's free question."
-        )
-        return EntitlementResult(
-            allowed=False,
-            code="ask_sign_in_required",
-            message=f"{reason} Sign in to buy coins for follow-up messages or choose Plus.",
-            reset_at=first + ASK_FREE_WINDOW if first else None,
-            payment_required=True,
-            sign_in_required=True,
-        )
+    reason = (
+        f"Free questions are limited to {ASK_FREE_LIMIT_WORDS} words."
+        if word_count > ASK_FREE_LIMIT_WORDS
+        else "You've used today's free question."
+    )
     return EntitlementResult(
         allowed=False,
         code="ask_coins_required",
-        message="Your free question has been used. Buy coins for occasional follow-ups or choose Plus for unlimited Ask.",
+        message=f"{reason} Buy coins for follow-up messages, or choose Plus for unlimited Ask.",
         reset_at=first + ASK_FREE_WINDOW if first else None,
         payment_required=True,
         coin_balance=balance,
@@ -356,8 +363,11 @@ def check_planner_entitlement(
     *,
     subject_ids: tuple[str, ...] | None = None,
     network_hash: str | None = None,
+    authenticated: bool = False,
     email: str | None = None,
 ) -> EntitlementResult:
+    if not authenticated:
+        return _sign_in_required("planner_sign_in_required", SIGN_IN_REQUIRED_PLANNER)
     tier = effective_tier(session, subject_id, email)
     if tier != SubscriptionTier.FREE:
         return EntitlementResult(allowed=True, tier=tier)
@@ -502,6 +512,7 @@ def reserve_planner(
     *,
     subject_ids: tuple[str, ...] | None = None,
     network_hash: str | None = None,
+    authenticated: bool = False,
     email: str | None = None,
 ) -> EntitlementResult:
     result = check_planner_entitlement(
@@ -509,6 +520,7 @@ def reserve_planner(
         subject_id,
         subject_ids=subject_ids,
         network_hash=network_hash,
+        authenticated=authenticated,
         email=email,
     )
     if not result.allowed:
@@ -530,10 +542,11 @@ def entitlement_snapshot(
     email: str | None = None,
 ) -> dict[str, object]:
     identities = subject_ids or (subject_id,)
+    authenticated = not subject_id.startswith("anon-")
     admin = has_unrestricted_admin_access(session, subject_id, email)
     tier = SubscriptionTier.PROFESSIONAL if admin else _subscription_tier(session, subject_id)
     paid = tier != SubscriptionTier.FREE
-    balance = coin_balance(session, subject_id) if not subject_id.startswith("anon-") else 0
+    balance = coin_balance(session, subject_id) if authenticated else 0
     ask_first = None if paid else _first_recent_usage(session, identities, "ask", ASK_FREE_WINDOW, network_hash)
     planner_first = None if paid else _first_recent_usage(
         session, identities, "planner", PLANNER_FREE_WINDOW, network_hash
@@ -541,12 +554,12 @@ def entitlement_snapshot(
     return {
         "tier": tier.value,
         "ask": {
-            "allowed": paid or balance > 0 or ask_first is None,
+            "allowed": authenticated and (paid or balance > 0 or ask_first is None),
             "word_limit": None if admin else ASK_PAID_LIMIT_WORDS if paid or balance > 0 else ASK_FREE_LIMIT_WORDS,
             "reset_at": ask_first + ASK_FREE_WINDOW if ask_first else None,
         },
         "planner": {
-            "allowed": paid or planner_first is None,
+            "allowed": authenticated and (paid or planner_first is None),
             "reset_at": planner_first + PLANNER_FREE_WINDOW if planner_first else None,
         },
         "report_download": {"allowed": paid},

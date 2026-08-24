@@ -18,6 +18,8 @@ import {
   Trash2,
 } from "lucide-react";
 import { useAccount } from "@/components/Account";
+import { CoinPaywall, type CoinPack } from "@/components/CoinPaywall";
+import { SignInGate } from "@/components/SignInGate";
 import { ApiError, askVeriFinder, clearAskConversation, createCoinCheckout } from "@/services/api";
 import type { AskResponse, DecisionEvidenceKind } from "@/types";
 
@@ -59,7 +61,7 @@ export default function AskPage() {
   const [error, setError] = useState<ApiError | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [purchasing, setPurchasing] = useState<"coins_25" | "coins_75" | null>(null);
+  const [purchasing, setPurchasing] = useState<CoinPack | null>(null);
   const [historyReady, setHistoryReady] = useState(false);
   const controllerRef = useRef<AbortController | null>(null);
   const data = exchanges.at(-1)?.response ?? null;
@@ -118,7 +120,7 @@ export default function AskPage() {
     }
   }
 
-  async function buyCoins(pack: "coins_25" | "coins_75") {
+  async function buyCoins(pack: CoinPack) {
     if (!session) {
       openAccount("sign-in");
       return;
@@ -182,6 +184,9 @@ export default function AskPage() {
           </div>
         )}
 
+        {!session ? (
+          <SignInGate className="ask-signin-gate" feature="Ask VeriFinder" onSignIn={() => openAccount("sign-in")} />
+        ) : (
         <form className="ask-composer" onSubmit={submit}>
           <div className="ask-composer-heading">
             <label htmlFor="ask-question">{exchanges.length ? "Ask a follow-up" : "What do you need to know?"}</label>
@@ -201,22 +206,20 @@ export default function AskPage() {
           {!exchanges.length && <div className="example-prompts" aria-label="Example questions"><span>Try:</span>{EXAMPLES.map((example) => <button key={example} type="button" onClick={() => void submit(undefined, example)}>{example}</button>)}</div>}
           {exchanges.length > 0 && <p className="conversation-context"><MessageSquareText size={13} />The next message will use up to 6 previous answers and their returned records.</p>}
         </form>
+        )}
 
         {notice && <div className="ask-notice" role="status"><BadgeCheck size={18} /><span>{notice}</span></div>}
 
         {paymentRequired && (
-          <section className="coin-paywall" aria-labelledby="coin-paywall-title">
-            <div className="coin-paywall-copy"><span><Coins size={22} /></span><div><p className="kicker">Pay as you go</p><h2 id="coin-paywall-title">Keep this conversation going.</h2><p>{error?.message}</p></div></div>
-            {!session ? (
-              <button className="button" type="button" onClick={() => openAccount("sign-in")}>Sign in to buy coins</button>
-            ) : (
-              <div className="coin-pack-grid">
-                <button type="button" disabled={Boolean(purchasing) || !account?.coin_billing_configured} onClick={() => void buyCoins("coins_25")}><span><strong>25 coins</strong><small>16p per Ask message</small></span><em>£3.99</em>{purchasing === "coins_25" && <LoaderCircle className="spin" size={16} />}</button>
-                <button className="is-best" type="button" disabled={Boolean(purchasing) || !account?.coin_billing_configured} onClick={() => void buyCoins("coins_75")}><span><strong>75 coins</strong><small>12p per Ask message</small></span><em>£8.99</em>{purchasing === "coins_75" && <LoaderCircle className="spin" size={16} />}</button>
-              </div>
-            )}
-            <div className="coin-paywall-footer"><small>One-time payment. 1 coin = 1 Ask message. Coins do not expire.</small><button type="button" onClick={() => openAccount("plans")}><Sparkles size={13} />Or get unlimited Ask with Plus</button></div>
-          </section>
+          <CoinPaywall
+            message={error?.message}
+            isSignedIn={Boolean(session)}
+            coinBillingConfigured={account?.coin_billing_configured ?? false}
+            purchasing={purchasing}
+            onBuy={(pack) => void buyCoins(pack)}
+            onSignIn={() => openAccount("sign-in")}
+            onViewPlans={() => openAccount("plans")}
+          />
         )}
 
         {error && !paymentRequired && <div className="decision-error" role="alert"><CircleAlert size={19} /><div><strong>Could not answer that question</strong><span>{error.message}</span></div></div>}

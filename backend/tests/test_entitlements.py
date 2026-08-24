@@ -80,55 +80,78 @@ def test_get_or_create_profile_defaults_to_free_tier():
     assert again.id == profile.id
 
 
+def test_ask_requires_an_account_before_any_quota_is_considered():
+    session = entitlements_session()
+    result = check_ask_entitlement(session, "anon-2", "Is this school any good?")
+    assert result.allowed is False
+    assert result.sign_in_required is True
+    assert result.code == "ask_sign_in_required"
+    assert result.payment_required is False
+
+
+def test_planner_requires_an_account_before_any_quota_is_considered():
+    session = entitlements_session()
+    result = check_planner_entitlement(session, "anon-2")
+    assert result.allowed is False
+    assert result.sign_in_required is True
+    assert result.code == "planner_sign_in_required"
+
+
 def test_ask_entitlement_blocks_over_word_limit():
     session = entitlements_session()
     long_question = " ".join(["word"] * 21)
-    result = check_ask_entitlement(session, "anon-2", long_question)
+    result = check_ask_entitlement(session, "member-2", long_question, authenticated=True)
     assert result.allowed is False
     assert "20 words" in (result.message or "")
 
 
 def test_ask_entitlement_allows_one_free_question_per_day_then_blocks():
     session = entitlements_session()
-    first = check_ask_entitlement(session, "anon-3", "Is this school any good?")
+    first = check_ask_entitlement(session, "member-3", "Is this school any good?", authenticated=True)
     assert first.allowed is True
-    record_usage(session, "anon-3", "ask", detail="Is this school any good?")
+    record_usage(session, "member-3", "ask", detail="Is this school any good?")
 
-    second = check_ask_entitlement(session, "anon-3", "What about this one?")
+    second = check_ask_entitlement(session, "member-3", "What about this one?", authenticated=True)
     assert second.allowed is False
     assert "free question" in (second.message or "")
 
 
 def test_ask_entitlement_ignores_daily_limit_after_the_window_elapses():
     session = entitlements_session()
-    session.add(Profile(id="anon-4", tier=SubscriptionTier.FREE))
+    session.add(Profile(id="member-4", tier=SubscriptionTier.FREE))
     session.add(
         UsageEvent(
-            subject_id="anon-4",
+            subject_id="member-4",
             feature="ask",
             created_at=datetime.now(timezone.utc) - timedelta(days=2),
         )
     )
     session.commit()
-    result = check_ask_entitlement(session, "anon-4", "Any updates on this company?")
+    result = check_ask_entitlement(
+        session, "member-4", "Any updates on this company?", authenticated=True
+    )
     assert result.allowed is True
 
 
 def test_ask_entitlement_unlimited_for_paid_tier():
     session = entitlements_session()
-    session.add(Profile(id="anon-5", tier=SubscriptionTier.PLUS))
+    session.add(Profile(id="member-5", tier=SubscriptionTier.PLUS))
     session.commit()
     for _ in range(3):
-        result = check_ask_entitlement(session, "anon-5", " ".join(["word"] * 40))
+        result = check_ask_entitlement(
+            session, "member-5", " ".join(["word"] * 40), authenticated=True
+        )
         assert result.allowed is True
-        record_usage(session, "anon-5", "ask")
+        record_usage(session, "member-5", "ask")
 
 
 def test_ask_entitlement_enforces_paid_sixty_word_cap():
     session = entitlements_session()
     session.add(Profile(id="paid-1", tier=SubscriptionTier.PLUS))
     session.commit()
-    result = check_ask_entitlement(session, "paid-1", " ".join(["word"] * 61))
+    result = check_ask_entitlement(
+        session, "paid-1", " ".join(["word"] * 61), authenticated=True
+    )
     assert result.allowed is False
     assert "60 words" in (result.message or "")
 
@@ -158,13 +181,17 @@ def test_authenticated_follow_up_atomically_spends_and_refunds_one_coin():
     assert refund_ask_coin(session, "coin-user", result.coin_reservation_id) is False
 
 
-def test_used_free_allowance_requests_payment_and_sign_in_for_anonymous_user():
+def test_used_free_allowance_asks_a_signed_in_member_to_buy_coins():
     session = entitlements_session()
-    record_usage(session, "anon-paywall", "ask")
-    result = check_ask_entitlement(session, "anon-paywall", "Can I ask a follow-up?")
+    record_usage(session, "member-paywall", "ask")
+    result = check_ask_entitlement(
+        session, "member-paywall", "Can I ask a follow-up?", authenticated=True
+    )
     assert result.allowed is False
+    assert result.code == "ask_coins_required"
     assert result.payment_required is True
-    assert result.sign_in_required is True
+    assert result.sign_in_required is False
+    assert "Buy coins" in (result.message or "")
 
 
 def test_paid_subscription_never_spends_prepaid_coins():
@@ -185,11 +212,11 @@ def test_paid_subscription_never_spends_prepaid_coins():
 
 def test_planner_entitlement_allows_one_free_plan_per_week_then_blocks():
     session = entitlements_session()
-    first = check_planner_entitlement(session, "anon-6")
+    first = check_planner_entitlement(session, "member-6", authenticated=True)
     assert first.allowed is True
-    record_usage(session, "anon-6", "planner")
+    record_usage(session, "member-6", "planner")
 
-    second = check_planner_entitlement(session, "anon-6")
+    second = check_planner_entitlement(session, "member-6", authenticated=True)
     assert second.allowed is False
     assert "free plan" in (second.message or "")
 
@@ -225,7 +252,7 @@ def test_admin_grant_bypasses_all_product_entitlement_restrictions():
         authenticated=True,
         email=email,
     )
-    planner = check_planner_entitlement(session, subject_id, email=email)
+    planner = check_planner_entitlement(session, subject_id, authenticated=True, email=email)
     report = check_report_entitlement(session, subject_id, email)
     watchlist = check_watchlist_entitlement(session, subject_id, email)
     snapshot = entitlement_snapshot(session, subject_id, email=email)
@@ -241,3 +268,19 @@ def test_admin_grant_bypasses_all_product_entitlement_restrictions():
     assert snapshot["planner"]["allowed"] is True
     assert snapshot["report_download"]["allowed"] is True
     assert snapshot["watchlists"]["allowed"] is True
+
+
+def test_snapshot_reports_ask_and_planner_closed_for_a_signed_out_visitor():
+    session = entitlements_session()
+    snapshot = entitlement_snapshot(session, "anon-snapshot")
+    assert snapshot["ask"]["allowed"] is False
+    assert snapshot["planner"]["allowed"] is False
+
+
+def test_snapshot_reopens_ask_and_planner_once_signed_in():
+    session = entitlements_session()
+    session.add(Profile(id="member-snapshot", tier=SubscriptionTier.FREE))
+    session.commit()
+    snapshot = entitlement_snapshot(session, "member-snapshot")
+    assert snapshot["ask"]["allowed"] is True
+    assert snapshot["planner"]["allowed"] is True
