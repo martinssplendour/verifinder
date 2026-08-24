@@ -7,7 +7,39 @@ from app.services.normalization import normalise_name
 
 
 POSTCODE_RE = re.compile(r"\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b", re.IGNORECASE)
-LIMIT_RE = re.compile(r"\btop\s+(\d{1,2})\b", re.IGNORECASE)
+
+# A list is capped at five unless the question names a count, so "sponsors in
+# Leeds" returns a short readable list rather than a wall of twenty.
+DEFAULT_LIST_LIMIT = 5
+NUMBER_WORDS = {
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+    "fifteen": 15,
+    "twenty": 20,
+}
+LIMIT_RE = re.compile(
+    r"\b(?:top|first|best)\s+(\d{1,2}|" + "|".join(NUMBER_WORDS) + r")\b",
+    re.IGNORECASE,
+)
+# A request is a question when it is phrased as one. Everything else - "show me",
+# "top ten", "find" - is a list request, and a list request is answered with the
+# list alone: no summary, no interpretation, just records to open.
+QUESTION_RE = re.compile(
+    r"\?\s*$"
+    r"|^\s*(?:is|are|was|were|do|does|did|can|could|should|would|will|may|has|have|had|am"
+    r"|what|which|who|whose|whom|how|why|when|where)\b",
+    re.IGNORECASE,
+)
 LOCATION_RE = re.compile(
     r"\b(?:in|around|near|within)\s+([A-Za-z][A-Za-z .'-]{1,60}?)(?=\s+(?:for|with|that|which|where|under)\b|[?.!,]|$)",
     re.IGNORECASE,
@@ -43,6 +75,20 @@ FOLLOW_UP_RE = re.compile(
     r"previous|earlier|same|above|former|latter)\b|^(?:and|but|so|then|now|in|near|around)\b",
     re.IGNORECASE,
 )
+
+
+def explicit_limit(question: str) -> int | None:
+    """The count the question names, written either as a word or a digit."""
+    match = LIMIT_RE.search(question)
+    if not match:
+        return None
+    value = match.group(1).lower()
+    return NUMBER_WORDS.get(value) or int(value)
+
+
+def is_question(question: str) -> bool:
+    """Whether the user asked something, as opposed to requesting a list."""
+    return bool(QUESTION_RE.search(question.strip()))
 
 
 def _location(question: str) -> str | None:
@@ -107,8 +153,8 @@ def deterministic_interpretation(request: AskRequest) -> AskInterpretation:
     intent = _intent(request.question)
     location = None if intent == "qualification_search" else _location(request.question)
     industry = _industry(request.question)
-    match = LIMIT_RE.search(request.question)
-    limit = min(request.limit, int(match.group(1))) if match else request.limit
+    named = explicit_limit(request.question)
+    limit = min(request.limit, named if named is not None else DEFAULT_LIST_LIMIT)
     route = None
     lowered = request.question.lower()
     if "skilled worker" in lowered:
@@ -153,6 +199,6 @@ def contextual_interpretation(request: AskRequest) -> AskInterpretation:
         location=current.location or (previous.location if intent != "qualification_search" else None),
         industry=current.industry or (previous.industry if supports_industry else None),
         sponsorship_route=current.sponsorship_route or (previous.sponsorship_route if supports_route else None),
-        limit=current.limit if LIMIT_RE.search(request.question) else min(request.limit, previous.limit),
+        limit=current.limit if explicit_limit(request.question) is not None else min(request.limit, previous.limit),
         assumptions=list(dict.fromkeys(assumptions)),
     )

@@ -178,7 +178,7 @@ export default function AskPage() {
             {exchanges.slice(0, -1).map((exchange, index) => (
               <article key={`${exchange.response.generated_at}-${index}`}>
                 <div className="thread-question"><span>You</span><p>{exchange.question}</p></div>
-                <div className="thread-answer"><span><Sparkles size={13} />VeriFinder</span><strong>{exchange.response.headline}</strong><p>{exchange.response.summary}</p>{exchange.response.results.length > 0 && <small>{exchange.response.results.slice(0, 3).map((result) => result.title).join(" · ")}{exchange.response.results.length > 3 ? ` +${exchange.response.results.length - 3} more` : ""}</small>}</div>
+                <div className="thread-answer"><span><Sparkles size={13} />VeriFinder</span><strong>{exchange.response.headline}</strong>{exchange.response.summary && <p>{exchange.response.summary}</p>}{exchange.response.results.length > 0 && <small>{exchange.response.results.slice(0, 3).map((result) => result.title).join(" · ")}{exchange.response.results.length > 3 ? ` +${exchange.response.results.length - 3} more` : ""}</small>}</div>
               </article>
             ))}
           </div>
@@ -243,7 +243,7 @@ export default function AskPage() {
 
             <div className="ask-results-main">
               <div className="current-question"><span>You asked</span><p>{data.question}</p></div>
-              <div className="answer-heading"><div><span className="kicker">Evidence-backed answer</span><h2>{data.headline}</h2><p>{data.summary}</p>{data.context_turns_used > 0 && <small className="context-used"><MessageSquareText size={12} />Used {data.context_turns_used} earlier answer{data.context_turns_used === 1 ? "" : "s"}, including result records</small>}</div><span>{data.total} returned</span></div>
+              <div className="answer-heading"><div><span className="kicker">Evidence-backed answer</span><h2>{data.headline}</h2>{data.summary && <p>{data.summary}</p>}{data.context_turns_used > 0 && <small className="context-used"><MessageSquareText size={12} />Used {data.context_turns_used} earlier answer{data.context_turns_used === 1 ? "" : "s"}, including result records</small>}</div><span>{data.total} returned</span></div>
               {data.results.length === 0 ? (
                 <div className="decision-empty"><Search size={24} /><h3>{interpretation?.intent === "job_search" ? "Vacancies need a live jobs source" : "No matching records"}</h3><p>{interpretation?.intent === "job_search" ? "Use a verified alternative below, or start a new evidence-domain question." : "Try a full postcode, a broader location, or a more specific public-data subject."}</p>{(data.suggested_questions ?? []).length > 0 && <div className="ask-suggestions" aria-label="Verified alternatives">{data.suggested_questions.map((suggestion) => <button type="button" key={suggestion} disabled={loading} onClick={() => void submit(undefined, suggestion)}>{suggestion}<ArrowRight size={13} /></button>)}</div>}</div>
               ) : (

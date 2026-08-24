@@ -13,7 +13,7 @@ from app.services.decision_intelligence import (
     contextual_interpretation,
     deterministic_interpretation,
 )
-from app.services.gemini_reasoning import GeminiReasoner, ResultReview, _output_text
+from app.services.gemini_reasoning import GeminiReasoner, _output_text
 from test_area_property import data_session
 from test_sponsor_lookup import sponsor_session
 
@@ -210,61 +210,49 @@ def test_gemini_output_text_is_extracted_from_candidate_parts():
     assert _output_text(payload) == '{"intent":"general"}'
 
 
-def test_review_may_requery_once_and_the_better_result_set_wins(monkeypatch: pytest.MonkeyPatch):
-    async def review(self, *, question, interpretation, results, requested_limit):
-        assert results == []
-        return ResultReview(
-            answers_question=False,
-            assessment="The location filter matched no register entry.",
-            revision=interpretation.model_copy(update={"location": "London"}),
-        )
+def test_unstated_count_returns_a_short_list():
+    query = deterministic_interpretation(
+        AskRequest(question="Show me technology companies with sponsorship in Leeds", limit=20)
+    )
+    assert query.limit == 5
 
-    monkeypatch.setattr(GeminiReasoner, "review_results", review)
+
+def test_a_named_count_is_honoured_whether_spelled_or_written():
+    spelled = deterministic_interpretation(
+        AskRequest(question="top ten tech companies in Swinton", limit=20)
+    )
+    digits = deterministic_interpretation(
+        AskRequest(question="Top 10 tech companies in Swinton", limit=20)
+    )
+    assert spelled.limit == 10
+    assert digits.limit == 10
+
+
+def test_a_named_count_never_exceeds_the_caller_limit():
+    query = deterministic_interpretation(
+        AskRequest(question="top twenty sponsors in Leeds", limit=6)
+    )
+    assert query.limit == 6
+
+
+def test_a_list_request_returns_records_without_prose():
     response = asyncio.run(
         answer_question(
             sponsor_session(),
-            AskRequest(question="Top 10 jobs in Aberdeen", limit=10),
+            AskRequest(question="top ten companies with sponsorship in London", limit=10),
         )
     )
     assert response.results[0].title == "Northstar Labs Ltd"
-    assert response.interpretation.location == "London"
-    assert any("re-run after review" in item for item in response.interpretation.assumptions)
-    assert response.ai_mode == "gemini"
+    assert response.summary == ""
+    assert response.headline == "1 licensed worker sponsor in London"
 
 
-def test_review_revision_is_discarded_when_it_finds_less(monkeypatch: pytest.MonkeyPatch):
-    async def review(self, *, question, interpretation, results, requested_limit):
-        return ResultReview(
-            answers_question=False,
-            assessment="Trying a narrower location.",
-            revision=interpretation.model_copy(update={"location": "Aberdeen"}),
-        )
-
-    monkeypatch.setattr(GeminiReasoner, "review_results", review)
+def test_a_phrased_question_still_gets_an_answer_in_words():
     response = asyncio.run(
         answer_question(
             sponsor_session(),
-            AskRequest(question="Top 10 jobs in London", limit=10),
+            AskRequest(question="Which companies have worker sponsorship in London?", limit=10),
         )
     )
-    # A worse revision must never replace a result set that already had records.
-    assert response.results[0].title == "Northstar Labs Ltd"
-    assert response.interpretation.location == "London"
-
-
-def test_review_cannot_raise_the_caller_limit(monkeypatch: pytest.MonkeyPatch):
-    async def review(self, *, question, interpretation, results, requested_limit):
-        return ResultReview(
-            answers_question=False,
-            assessment="Widening the search.",
-            revision=interpretation.model_copy(update={"location": "London", "limit": 20}),
-        )
-
-    monkeypatch.setattr(GeminiReasoner, "review_results", review)
-    response = asyncio.run(
-        answer_question(
-            sponsor_session(),
-            AskRequest(question="Top 10 jobs in Aberdeen", limit=3),
-        )
-    )
-    assert response.interpretation.limit <= 3
+    assert response.results
+    assert response.summary
