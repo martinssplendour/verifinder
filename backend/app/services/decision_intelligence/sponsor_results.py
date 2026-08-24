@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from sqlalchemy import Text, cast, func, or_, select
+from sqlalchemy import Text, case, cast, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import SponsorRecord
 from app.schemas import AskInterpretation, AskResult
 from app.services.sponsor_lookup import latest_sponsor_context, rating_label, source_attribution as sponsor_source
 
-from .interpretation import INDUSTRY_NAME_TERMS
+from .interpretation import INDUSTRY_NAME_TERMS, canonical_industry
 from .shared import _fact
 
 
@@ -21,12 +21,27 @@ def _sponsor_results(session: Session, query: AskInterpretation) -> tuple[list[A
         conditions.append(
             or_(func.lower(SponsorRecord.town_city).contains(place), func.lower(SponsorRecord.county).contains(place))
         )
-    industry_terms = INDUSTRY_NAME_TERMS.get(query.industry or "", ())
+    industry_terms = INDUSTRY_NAME_TERMS.get(canonical_industry(query.industry) or "", ())
     if industry_terms:
         conditions.append(or_(*(SponsorRecord.normalised_name.contains(term) for term in industry_terms)))
     if query.sponsorship_route:
         conditions.append(cast(SponsorRecord.routes, Text).contains(query.sponsorship_route))
-    candidates = list(session.scalars(select(SponsorRecord).where(*conditions).limit(max(query.limit * 30, 150))))
+    # Scoring happens in Python over a bounded window, so the window itself has to
+    # be the best-qualified rows. Without an order the database returns an
+    # arbitrary slice and the shortlist is whatever happened to come back first.
+    place = (query.location or "").lower()
+    candidates = list(
+        session.scalars(
+            select(SponsorRecord)
+            .where(*conditions)
+            .order_by(
+                case((func.lower(SponsorRecord.town_city) == place, 0), else_=1),
+                case((SponsorRecord.sponsor_rating.contains("(A rating)"), 0), else_=1),
+                SponsorRecord.organisation_name,
+            )
+            .limit(max(query.limit * 30, 150))
+        )
+    )
 
     def score(record: SponsorRecord) -> tuple[int, str]:
         value = 0

@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.database import Base, ReadOnlySessionError
-from app.models import DataSource
+from app.models import DataSource, SponsorRecord
 from app.schemas import AskInterpretation, AskRequest, PlanRequest
 from app.services.decision_intelligence import (
     answer_question,
@@ -13,7 +13,11 @@ from app.services.decision_intelligence import (
     contextual_interpretation,
     deterministic_interpretation,
 )
-from app.services.decision_intelligence.interpretation import fallback_response_style
+from app.services.decision_intelligence.interpretation import (
+    canonical_industry,
+    canonical_route,
+    fallback_response_style,
+)
 from app.services.gemini_reasoning import GeminiReasoner, _output_text
 from test_area_property import data_session
 from test_sponsor_lookup import sponsor_session
@@ -290,3 +294,83 @@ def test_response_style_from_the_model_decides_whether_prose_is_written(monkeypa
     )
     assert response.results
     assert response.summary
+
+def test_industry_wording_from_the_model_is_mapped_before_it_reaches_the_filter():
+    # "Tech" used to match no industry term, so the filter was dropped in silence
+    # and the answer was every sponsor in the town, alphabetically.
+    assert canonical_industry("Tech") == "technology"
+    assert canonical_industry("Technology") == "technology"
+    assert canonical_industry("software development") == "technology"
+    assert canonical_industry("Financial Services") == "financial services"
+    assert canonical_industry("retail") is None
+    assert canonical_route("skilled worker") == "Skilled Worker"
+    assert canonical_route("scale up") == "Scale-up"
+
+
+def test_a_free_text_industry_still_filters_the_sponsor_list(monkeypatch: pytest.MonkeyPatch):
+    async def interpret(self, question, requested_limit, conversation=None):
+        return AskInterpretation(
+            intent="sponsor_discovery",
+            location="London",
+            industry="Tech",
+            response_style="list",
+            limit=10,
+        )
+
+    monkeypatch.setattr(GeminiReasoner, "interpret_question", interpret)
+    session = sponsor_session()
+    session.add_all(
+        [
+            SponsorRecord(
+                dataset_version_id="version-1",
+                source_record_key="f" * 64,
+                organisation_name="Aardvark Catering Ltd",
+                normalised_name="aardvark catering limited",
+                town_city="London",
+                county=None,
+                sponsor_rating="Worker (A rating)",
+                routes=["Skilled Worker"],
+                active=True,
+                raw_record=[],
+            ),
+            SponsorRecord(
+                dataset_version_id="version-1",
+                source_record_key="g" * 64,
+                organisation_name="Zenith Software Systems Ltd",
+                normalised_name="zenith software systems limited",
+                town_city="London",
+                county=None,
+                sponsor_rating="Worker (A rating)",
+                routes=["Skilled Worker"],
+                active=True,
+                raw_record=[],
+            ),
+        ]
+    )
+    session.commit()
+
+    response = asyncio.run(
+        answer_question(session, AskRequest(question="Top 10 tech companies in London", limit=10))
+    )
+    # The catering firm sorts first alphabetically and the software firm last, so
+    # returning only the software firm proves the industry filter actually ran.
+    assert [result.title for result in response.results] == ["Zenith Software Systems Ltd"]
+    assert response.interpretation.industry == "technology"
+
+
+def test_an_unfilterable_industry_is_reported_rather_than_ignored(monkeypatch: pytest.MonkeyPatch):
+    async def interpret(self, question, requested_limit, conversation=None):
+        return AskInterpretation(
+            intent="sponsor_discovery",
+            location="London",
+            industry="aerospace",
+            response_style="list",
+            limit=10,
+        )
+
+    monkeypatch.setattr(GeminiReasoner, "interpret_question", interpret)
+    response = asyncio.run(
+        answer_question(sponsor_session(), AskRequest(question="Top 10 aerospace firms in London", limit=10))
+    )
+    assert response.interpretation.industry is None
+    assert any("aerospace" in item for item in response.interpretation.assumptions)

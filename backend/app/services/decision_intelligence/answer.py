@@ -10,7 +10,12 @@ from app.services.gemini_reasoning import GeminiReasoner
 
 from .area_results import _area_results
 from .food_results import _food_results
-from .interpretation import FOLLOW_UP_RE, contextual_interpretation
+from .interpretation import (
+    FOLLOW_UP_RE,
+    canonical_industry,
+    canonical_route,
+    contextual_interpretation,
+)
 from .property_results import _property_results
 from .qualification_results import _qualification_results
 from .sponsor_results import _sponsor_results
@@ -118,6 +123,17 @@ async def answer_question(session: Session, request: AskRequest) -> AskResponse:
         )
     query = deterministic if guarded_context else (interpreted or deterministic)
     interpreted_used = interpreted is not None and query is interpreted
+    # The model writes the form in free text, but the filters are keyed on a
+    # fixed vocabulary. Without this, "Tech" matched no industry term and the
+    # filter was dropped in silence rather than reported.
+    named_industry = query.industry
+    query.industry = canonical_industry(named_industry)
+    query.sponsorship_route = canonical_route(query.sponsorship_route)
+    if named_industry and not query.industry:
+        query.assumptions = [
+            *query.assumptions,
+            f'"{named_industry}" is not an industry VeriFinder can filter on, so that part of the request was not applied.',
+        ]
     # The row count is decided here, not by the model: an unstated count means a
     # short list, and a stated one is still capped by what the caller allows.
     query.limit = min(query.limit, deterministic.limit)

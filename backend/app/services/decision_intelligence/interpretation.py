@@ -70,11 +70,42 @@ INDUSTRY_NAME_TERMS = {
     "construction": ("construction", "building", "builders"),
     "hospitality": ("hotel", "restaurant", "hospitality", "catering"),
 }
+ROUTE_NAMES = {
+    "skilled worker": "Skilled Worker",
+    "scale up": "Scale-up",
+    "scaleup": "Scale-up",
+    "global business mobility": "Global Business Mobility",
+}
 FOLLOW_UP_RE = re.compile(
     r"\b(these|those|them|there|that|it|they|which|what about|how about|instead|also|"
     r"previous|earlier|same|above|former|latter)\b|^(?:and|but|so|then|now|in|near|around)\b",
     re.IGNORECASE,
 )
+
+
+def canonical_industry(value: str | None) -> str | None:
+    """Map any wording of an industry onto the vocabulary the filters understand.
+
+    The filter table is keyed on canonical names, so an unmapped value such as
+    "Tech" silently matched nothing and dropped the filter altogether. Every
+    industry reaching a query now passes through here first.
+    """
+    if not value:
+        return None
+    cleaned = normalise_name(value)
+    if cleaned in INDUSTRY_NAME_TERMS:
+        return cleaned
+    for word in cleaned.split():
+        if word in INDUSTRY_ALIASES:
+            return INDUSTRY_ALIASES[word]
+    return None
+
+
+def canonical_route(value: str | None) -> str | None:
+    """Match a sponsorship route to the exact spelling stored on the record."""
+    if not value:
+        return None
+    return ROUTE_NAMES.get(normalise_name(value))
 
 
 def explicit_limit(question: str) -> int | None:
