@@ -13,6 +13,13 @@ from app.schemas.areas import (
     PlanningSummary,
     PostcodePoint,
 )
+from app.schemas.browse import (
+    BrowseCatalogue,
+    BrowseDataset,
+    BrowseRecord,
+    BrowseResponse,
+    CountryOption,
+)
 from app.schemas.billing import (
     AccountEntitlements,
     AccountStatusResponse,
@@ -95,6 +102,11 @@ from app.schemas.watchlists import (
 )
 
 __all__ = [
+    "CountryOption",
+    "BrowseResponse",
+    "BrowseRecord",
+    "BrowseDataset",
+    "BrowseCatalogue",
     "AccountEntitlements",
     "AccountStatusResponse",
     "AiMode",

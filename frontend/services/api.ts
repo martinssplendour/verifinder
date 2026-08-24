@@ -6,6 +6,7 @@ export * from "./api/qualifications";
 export * from "./api/study";
 export * from "./api/food";
 export * from "./api/areas";
+export * from "./api/browse";
 export * from "./api/properties";
 export * from "./api/schools";
 export * from "./api/admin";

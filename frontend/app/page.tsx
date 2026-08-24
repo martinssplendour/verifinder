@@ -89,7 +89,7 @@ export default function HomePage() {
             <span className="kicker">Provenance built in</span>
             <h2>Verified data from</h2>
           </div>
-          <Link href="/sources">View source registry <ArrowRight size={15} /></Link>
+          <Link href="/browse">Browse the registers <ArrowRight size={15} /></Link>
         </div>
         <div className="source-logo-grid">
           <div className="source-logo"><span><Landmark size={22} /></span><div><strong>Companies House</strong><small>Company registration data</small></div></div>

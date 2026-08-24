@@ -4,6 +4,7 @@ from app.api.routers import (
     account_billing,
     admin,
     areas,
+    browse,
     changes,
     companies,
     food,
@@ -23,6 +24,7 @@ router = APIRouter()
 router.include_router(account_billing.router)
 router.include_router(admin.router)
 router.include_router(areas.router)
+router.include_router(browse.router)
 router.include_router(changes.router)
 router.include_router(companies.router)
 router.include_router(food.router)
