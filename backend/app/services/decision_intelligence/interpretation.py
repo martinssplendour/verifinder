@@ -31,13 +31,13 @@ LIMIT_RE = re.compile(
     r"\b(?:top|first|best)\s+(\d{1,2}|" + "|".join(NUMBER_WORDS) + r")\b",
     re.IGNORECASE,
 )
-# A request is a question when it is phrased as one. Everything else - "show me",
-# "top ten", "find" - is a list request, and a list request is answered with the
-# list alone: no summary, no interpretation, just records to open.
-QUESTION_RE = re.compile(
-    r"\?\s*$"
-    r"|^\s*(?:is|are|was|were|do|does|did|can|could|should|would|will|may|has|have|had|am"
-    r"|what|which|who|whose|whom|how|why|when|where)\b",
+# Only a fallback for when Gemini is unavailable: the model decides response
+# style as part of the query form, because phrasing varies far too much to
+# capture in a pattern. A trailing question mark is deliberately not a signal -
+# "top ten tech companies in Swinton?" is still a request for a list.
+ANSWER_OPENER_RE = re.compile(
+    r"^\s*(?:is|are|was|were|do|does|did|can|could|should|would|will|may|has|have|had|am"
+    r"|what|which|who|whose|whom|how|why|when|where|tell|explain|compare)\b",
     re.IGNORECASE,
 )
 LOCATION_RE = re.compile(
@@ -86,9 +86,15 @@ def explicit_limit(question: str) -> int | None:
     return NUMBER_WORDS.get(value) or int(value)
 
 
-def is_question(question: str) -> bool:
-    """Whether the user asked something, as opposed to requesting a list."""
-    return bool(QUESTION_RE.search(question.strip()))
+def fallback_response_style(question: str) -> str:
+    """A rough guess used only when Gemini did not fill the form.
+
+    Biased towards "list", because records are the evidence and a wrongly
+    withheld list is a worse answer than a wrongly omitted paragraph.
+    """
+    if explicit_limit(question) is not None:
+        return "list"
+    return "answer" if ANSWER_OPENER_RE.search(question.strip()) else "list"
 
 
 def _location(question: str) -> str | None:
@@ -176,6 +182,7 @@ def deterministic_interpretation(request: AskRequest) -> AskInterpretation:
         location=location,
         industry=industry,
         sponsorship_route=route,
+        response_style=fallback_response_style(request.question),
         limit=limit,
         assumptions=assumptions,
     )
@@ -199,6 +206,7 @@ def contextual_interpretation(request: AskRequest) -> AskInterpretation:
         location=current.location or (previous.location if intent != "qualification_search" else None),
         industry=current.industry or (previous.industry if supports_industry else None),
         sponsorship_route=current.sponsorship_route or (previous.sponsorship_route if supports_route else None),
+        response_style=current.response_style,
         limit=current.limit if explicit_limit(request.question) is not None else min(request.limit, previous.limit),
         assumptions=list(dict.fromkeys(assumptions)),
     )

@@ -6,13 +6,14 @@ from sqlalchemy.orm import Session
 
 from app.database import Base, ReadOnlySessionError
 from app.models import DataSource
-from app.schemas import AskRequest, PlanRequest
+from app.schemas import AskInterpretation, AskRequest, PlanRequest
 from app.services.decision_intelligence import (
     answer_question,
     build_plan,
     contextual_interpretation,
     deterministic_interpretation,
 )
+from app.services.decision_intelligence.interpretation import fallback_response_style
 from app.services.gemini_reasoning import GeminiReasoner, _output_text
 from test_area_property import data_session
 from test_sponsor_lookup import sponsor_session
@@ -252,6 +253,39 @@ def test_a_phrased_question_still_gets_an_answer_in_words():
         answer_question(
             sponsor_session(),
             AskRequest(question="Which companies have worker sponsorship in London?", limit=10),
+        )
+    )
+    assert response.results
+    assert response.summary
+
+
+def test_a_named_count_stays_a_list_even_when_punctuated_as_a_question():
+    # "top ten ... ?" is a request for records, not something to explain.
+    assert fallback_response_style("top ten tech companies in Swinton?") == "list"
+    assert fallback_response_style("any tech sponsors in Leeds?") == "list"
+
+
+def test_fallback_style_recognises_asks_that_do_not_open_with_a_question_word():
+    assert fallback_response_style("tell me if Acme Ltd is licensed") == "answer"
+    assert fallback_response_style("explain why this postcode is flagged") == "answer"
+    assert fallback_response_style("is Acme Ltd licensed") == "answer"
+
+
+def test_response_style_from_the_model_decides_whether_prose_is_written(monkeypatch: pytest.MonkeyPatch):
+    async def interpret(self, question, requested_limit, conversation=None):
+        # Phrased as a bare list request, but the user wanted it explained.
+        return AskInterpretation(
+            intent="sponsor_discovery",
+            location="London",
+            response_style="answer",
+            limit=5,
+        )
+
+    monkeypatch.setattr(GeminiReasoner, "interpret_question", interpret)
+    response = asyncio.run(
+        answer_question(
+            sponsor_session(),
+            AskRequest(question="sponsors in London", limit=10),
         )
     )
     assert response.results

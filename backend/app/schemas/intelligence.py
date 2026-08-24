@@ -28,6 +28,10 @@ class AskInterpretation(BaseModel):
     location: str | None = None
     industry: str | None = None
     sponsorship_route: str | None = None
+    # Whether the user wants records to open or an answer in words. Phrasing
+    # varies too much to detect with a pattern, so the model decides it as part
+    # of the same query form; "list" is the safe default.
+    response_style: Literal["list", "answer"] = "list"
     limit: int = Field(default=10, ge=1, le=20)
     assumptions: list[str] = Field(default_factory=list)
 

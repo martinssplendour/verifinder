@@ -9,6 +9,7 @@ export interface AskInterpretation {
   location: string | null;
   industry: string | null;
   sponsorship_route: string | null;
+  response_style: "list" | "answer";
   limit: number;
   assumptions: string[];
 }

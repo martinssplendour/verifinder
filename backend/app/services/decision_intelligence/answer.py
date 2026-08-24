@@ -10,7 +10,7 @@ from app.services.gemini_reasoning import GeminiReasoner
 
 from .area_results import _area_results
 from .food_results import _food_results
-from .interpretation import FOLLOW_UP_RE, contextual_interpretation, is_question
+from .interpretation import FOLLOW_UP_RE, contextual_interpretation
 from .property_results import _property_results
 from .qualification_results import _qualification_results
 from .sponsor_results import _sponsor_results
@@ -125,9 +125,9 @@ async def answer_question(session: Session, request: AskRequest) -> AskResponse:
     results, limitations, label = await _execute(session, query)
     headline = _headline(query, results, label)
 
-    # A list request is answered with the list. Only a question the user actually
-    # phrased as a question gets prose, and only then is the model asked to write it.
-    wants_prose = is_question(request.question) or query.intent == "general"
+    # A list request is answered with the list. Gemini decides which this is as
+    # part of the query form, so no wording rule has to guess at it here.
+    wants_prose = query.response_style == "answer" or query.intent == "general"
     summary = ""
     synthesized = None
     if wants_prose:
