@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ArrowRight, CircleAlert, LoaderCircle, MapPin, School, SearchX } from "lucide-react";
 import { DatasetSearchForm } from "@/components/DatasetSearchForm";
-import { NoRecordsFound } from "@/components/NoRecordsFound";
+import { NoExactMatch } from "@/components/NoExactMatch";
 import { searchSchools } from "@/services/api";
 import type { SchoolSearchResponse, SchoolSearchResult } from "@/types";
 
@@ -57,9 +57,9 @@ function SchoolResults() {
       ) : !current ? (
         <div className="loading-state"><LoaderCircle size={22} /> Searching the GIAS register…</div>
       ) : current.results.length === 0 ? (
-        <NoRecordsFound query={query} hint="Try the exact URN, or a shorter part of the school name.">
+        <NoExactMatch query={query} hint="Try the exact URN, or a shorter part of the school name.">
           {current.suggestions.map((result) => <SchoolCard result={result} key={result.urn} />)}
-        </NoRecordsFound>
+        </NoExactMatch>
       ) : (
         <section className="result-group">
           <div className="result-group-heading"><div><span className="result-group-icon school-group-icon"><School size={18} /></span><div><h2>GIAS establishment register</h2><p>Department for Education · {current.dataset_version}</p></div></div><span>{current.total} found</span></div>

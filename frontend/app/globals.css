@@ -214,9 +214,7 @@ button { color: inherit; }
 .dot-status.is-active::before { background: #40a96b; }
 .result-open { display: flex; align-items: center; gap: 5px; color: var(--brand); font-size: 12px; font-weight: 700; }
 
-/* No-records answer: the miss, then near matches kept visibly subordinate */
-.no-records { margin-top: 8px; }
-.no-records-notice { min-height: 190px; padding: 32px 30px 28px; }
+/* Possible matches: real results, kept visibly apart from an exact hit */
 .suggestion-group { margin-top: 14px; }
 .suggestion-group-heading { border-color: #eadfc6; background: #fffdf6; }
 .suggestion-group-heading p { max-width: 640px; }

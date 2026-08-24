@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ArrowRight, Award, BadgeCheck, BookOpenCheck, CircleAlert, LoaderCircle, SearchX } from "lucide-react";
 import { DatasetSearchForm } from "@/components/DatasetSearchForm";
-import { NoRecordsFound } from "@/components/NoRecordsFound";
+import { NoExactMatch } from "@/components/NoExactMatch";
 import { searchQualifications } from "@/services/api";
 import type { QualificationSearchResponse, QualificationSearchResult } from "@/types";
 
@@ -81,9 +81,9 @@ function QualificationResults() {
       ) : !current ? (
         <div className="loading-state"><LoaderCircle size={22} /> Searching connected qualification registers…</div>
       ) : current.results.length === 0 ? (
-        <NoRecordsFound query={query} hint="Check the title or number. No match does not, by itself, prove that a qualification is invalid.">
+        <NoExactMatch query={query} hint="Check the title or number. No match does not, by itself, prove that a qualification is invalid.">
           {current.suggestions.map((result) => <QualificationCard result={result} key={`${result.record_type}-${result.id}`} />)}
-        </NoRecordsFound>
+        </NoExactMatch>
       ) : (
         <>
           <QualificationGroup heading="Ofqual / CCEA Regulation" description="England and Northern Ireland regulated qualification records" results={ofqual} tone="ofqual" />

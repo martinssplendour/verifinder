@@ -14,7 +14,7 @@ import {
   SearchX,
 } from "lucide-react";
 import { DatasetSearchForm } from "@/components/DatasetSearchForm";
-import { NoRecordsFound } from "@/components/NoRecordsFound";
+import { NoExactMatch } from "@/components/NoExactMatch";
 import { searchStudyProviders } from "@/services/api";
 import type { StudyProviderSearchResponse, StudyProviderSearchResult } from "@/types";
 
@@ -118,9 +118,9 @@ function StudyResults() {
       ) : !current ? (
         <div className="loading-state"><LoaderCircle size={22} /> Searching both official registers…</div>
       ) : current.results.length === 0 ? (
-        <NoRecordsFound query={query} hint="Try the exact legal or trading name. No match is not proof that a provider is illegitimate.">
+        <NoExactMatch query={query} hint="Try the exact legal or trading name. No match is not proof that a provider is illegitimate.">
           {current.suggestions.map((result) => <StudyCard result={result} key={`${result.record_type}-${result.id}`} />)}
-        </NoRecordsFound>
+        </NoExactMatch>
       ) : (
         <>
           <ResultGroup heading="Student sponsor register" description="UK Visas and Immigration · licensed student sponsors" results={studentResults} kind="student_sponsor" />

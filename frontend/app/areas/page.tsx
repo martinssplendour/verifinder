@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ArrowUpRight, BarChart3, CircleAlert, Landmark, LoaderCircle, MapPin, SearchX, ShieldAlert, Waves } from "lucide-react";
 import { DatasetSearchForm } from "@/components/DatasetSearchForm";
-import { NoRecordsFound } from "@/components/NoRecordsFound";
+import { NoExactMatch } from "@/components/NoExactMatch";
 import { WatchButton } from "@/components/WatchButton";
 import { ApiError, checkArea } from "@/services/api";
 import type { AreaCheckResponse } from "@/types";
@@ -54,19 +54,19 @@ function AreaResults() {
       {!query || query.length < 5 ? (
         <div className="empty-state"><SearchX size={28} /><h2>Enter a full postcode</h2><p>Area Check needs a complete Great Britain postcode to anchor the official data lookups.</p></div>
       ) : error && error.suggestions.length > 0 ? (
-        <NoRecordsFound
+        <NoExactMatch
           query={query}
           hint={error.message}
-          suggestionsLabel="Nearby postcodes on the register"
-          suggestionsNote="Real postcodes in the same outward area. Pick the one you meant to check."
-          suggestionsClassName="suggestion-chips"
+          label="Nearby postcodes on the register"
+          note="Real postcodes in the same outward area — pick the one you meant to check."
+          listClassName="suggestion-chips"
         >
           {error.suggestions.map((postcode) => (
             <Link className="suggestion-chip" href={`/areas?q=${encodeURIComponent(postcode)}`} key={postcode}>
               <MapPin size={14} /> {postcode}
             </Link>
           ))}
-        </NoRecordsFound>
+        </NoExactMatch>
       ) : error ? (
         <div className="empty-state error-state" role="alert"><CircleAlert size={28} /><h2>We could not check that area</h2><p>{error.message}</p></div>
       ) : !current ? (

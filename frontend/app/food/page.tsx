@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ArrowRight, CalendarDays, CircleAlert, LoaderCircle, MapPin, SearchX, ShieldCheck, Utensils } from "lucide-react";
 import { DatasetSearchForm } from "@/components/DatasetSearchForm";
-import { NoRecordsFound } from "@/components/NoRecordsFound";
+import { NoExactMatch } from "@/components/NoExactMatch";
 import { searchFood } from "@/services/api";
 import type { FoodEstablishmentSearchResult, FoodSearchResponse } from "@/types";
 
@@ -64,9 +64,9 @@ function FoodResults() {
       ) : !current ? (
         <div className="loading-state"><LoaderCircle size={22} /> Searching Food Standards Agency records…</div>
       ) : current.results.length === 0 ? (
-        <NoRecordsFound query={query} hint="Try the trading name, postcode or a shorter spelling. Some private-address businesses omit location details.">
+        <NoExactMatch query={query} hint="Try the trading name, postcode or a shorter spelling. Some private-address businesses omit location details.">
           {current.suggestions.map((result) => <FoodCard result={result} key={result.id} />)}
-        </NoRecordsFound>
+        </NoExactMatch>
       ) : (
         <section className="result-group" aria-labelledby="food-results-heading">
           <div className="result-group-heading"><div><span className="result-group-icon food-group-icon"><Utensils size={18} /></span><div><h2 id="food-results-heading">Food hygiene register</h2><p>Food Standards Agency records · {current.dataset_version}</p></div></div><span>{current.total} found</span></div>

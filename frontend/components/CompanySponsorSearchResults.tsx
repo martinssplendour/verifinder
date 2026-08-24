@@ -10,7 +10,7 @@ import {
   MapPin,
   ShieldCheck,
 } from "lucide-react";
-import { NoRecordsFound } from "@/components/NoRecordsFound";
+import { NoExactMatch } from "@/components/NoExactMatch";
 import { searchCompanies, searchSponsors } from "@/services/api";
 import type { SearchResponse, SearchResult, SponsorRecordView, SponsorSearchResponse } from "@/types";
 
@@ -141,9 +141,9 @@ export function CompanySponsorSearchResults({
       {companyData ? <CompanyGroup data={companyData} /> : null}
       {sponsorData ? <SponsorGroup data={sponsorData} /> : null}
       {found === 0 && !companyIssue && !sponsorIssue ? (
-        <NoRecordsFound query={query} hint="These registers are matched on the exact legal name or number, so a small difference in spelling or suffix returns nothing.">
+        <NoExactMatch query={query} hint="These registers are matched on the exact legal name or number, so check the spelling and any suffix such as Ltd or PLC.">
           {suggestions}
-        </NoRecordsFound>
+        </NoExactMatch>
       ) : null}
     </div>
   );

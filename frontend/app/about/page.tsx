@@ -14,7 +14,7 @@ export default function AboutPage() {
       <div className="content-hero">
         <span className="eyebrow"><Building2 size={15} /> How VeriFinder works</span>
         <h1>Official data. Clear answers.</h1>
-        <p>VeriFinder turns fragmented public records into decision-friendly answers without treating AI-generated text as evidence.</p>
+        <p>Check a UK company, visa sponsor, school, qualification, food hygiene rating, property sale or postcode against the official register that holds it — and see the source and date behind every answer.</p>
       </div>
       <section className="evidence-flow" aria-label="Verified information flow">
         {FLOW.map(({ icon: Icon, title, copy }, index) => (

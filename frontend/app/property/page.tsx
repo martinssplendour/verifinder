@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ArrowRight, CalendarDays, CircleAlert, Home, LoaderCircle, MapPin, PoundSterling, SearchX } from "lucide-react";
 import { DatasetSearchForm } from "@/components/DatasetSearchForm";
-import { NoRecordsFound } from "@/components/NoRecordsFound";
+import { NoExactMatch } from "@/components/NoExactMatch";
 import { searchProperties } from "@/services/api";
 import type { PropertySearchResponse, PropertySearchResult } from "@/types";
 
@@ -63,14 +63,14 @@ function PropertyResults() {
       ) : !current ? (
         <div className="loading-state"><LoaderCircle size={22} /> Searching recorded sales…</div>
       ) : current.results.length === 0 ? (
-        <NoRecordsFound
+        <NoExactMatch
           query={query}
           hint="A no-match does not mean the property has never sold — the snapshot only covers 2025–2026 sales in England and Wales."
-          suggestionsLabel="Other recorded sales nearby"
-          suggestionsNote="Sales recorded in the same postcode area. None of these is the address or postcode you searched."
+          label="Other recorded sales nearby"
+          note="Sales recorded in the same postcode area — none is the exact address or postcode you searched."
         >
           {current.suggestions.map((result) => <PropertyCard result={result} key={result.property_key} />)}
-        </NoRecordsFound>
+        </NoExactMatch>
       ) : (
         <section className="result-group">
           <div className="result-group-heading"><div><span className="result-group-icon property-group-icon"><Home size={18} /></span><div><h2>HM Land Registry Price Paid Data</h2><p>Imported 2025–2026 snapshot · {current.dataset_version}</p></div></div><span>{current.total} found</span></div>
